@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Turnos · La Pelu</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="spiral">
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <h1>🐾 Turnos · La Pelu</h1>
+    <div class="subtitle" id="subtitle">Cargando turnos...</div>
+  </header>
+
+  <div class="alert-banner" id="alertBanner">
+    <div class="paw-alert" id="pawAlertIcon"></div>
+    <div class="alert-text" id="alertText">
+      Turnos de hoy sin confirmar
+      <small>Tocá para ir al día de hoy</small>
+    </div>
+    <div class="alert-arrow">›</div>
+  </div>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Buscar por dueño/a o mascota...">
+    <button class="clear-search" id="clearSearch">✕</button>
+  </div>
+
+  <div class="week-nav">
+    <div class="week-arrow" id="prevWeek">‹</div>
+    <div class="week-strip" id="weekStrip"></div>
+    <div class="week-arrow" id="nextWeek">›</div>
+  </div>
+
+  <div class="day-label">
+    <span id="dayLabel"></span>
+    <span class="count" id="dayCount">0 turnos</span>
+  </div>
+
+  <div class="ledger" id="ledger"></div>
+</div>
+
+<button class="fab" id="fabAdd">+</button>
+
+<div class="overlay" id="overlay">
+  <div class="card-form">
+    <h2 id="formTitle">Nuevo turno</h2>
+    <div class="form-sub" id="formSub"></div>
+    <form id="turnoForm">
+      <div class="row2">
+        <div class="field">
+          <label>Fecha</label>
+          <input type="date" id="f_fecha">
+        </div>
+        <div class="field">
+          <label>Hora</label>
+          <input type="time" id="f_hora">
+        </div>
+      </div>
+      <div class="field">
+        <label>Dueño/a de la mascota</label>
+        <input type="text" id="f_dueno" placeholder="Ej: María López">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Mascota</label>
+          <input type="text" id="f_mascota" placeholder="Ej: Rocco">
+        </div>
+        <div class="field">
+          <label>Tipo / raza</label>
+          <input type="text" id="f_tipoMascota" placeholder="Ej: Caniche">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Servicio</label>
+          <select id="f_servicio">
+            <option value="Baño">Baño</option>
+            <option value="Corte">Corte</option>
+            <option value="Baño y corte">Baño y corte</option>
+            <option value="Deslanado">Deslanado</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input type="tel" id="f_telefono" placeholder="11 1234 5678">
+        </div>
+      </div>
+      <div class="field">
+        <label>Notas (ej: nerviosa, alergias)</label>
+        <textarea id="f_notas" placeholder="Opcional"></textarea>
+      </div>
+      <div class="field">
+        <label>Estado</label>
+        <div class="estado-choices" id="estadoChoices">
+          <div class="estado-chip" data-estado="pendiente">Pendiente</div>
+          <div class="estado-chip" data-estado="confirmado">Confirmado</div>
+          <div class="estado-chip" data-estado="realizado">Realizado</div>
+          <div class="estado-chip" data-estado="cancelado">Cancelado</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Cargado por</label>
+        <select id="f_cargadoPor">
+          <option value="Dueña">Dueña</option>
+          <option value="Peluquera">Peluquera</option>
+          <option value="Ambar">Ambar</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-delete" id="btnDelete" style="display:none;">Eliminar</button>
+        <button type="button" class="btn btn-secondary" id="btnCancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
