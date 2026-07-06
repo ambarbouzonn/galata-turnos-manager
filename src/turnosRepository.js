@@ -84,25 +84,11 @@ async function getRemoteTurnos() {
   return data.map(toAppTurno);
 }
 
-async function migrateLocalTurnosIfRemoteIsEmpty(remoteTurnos) {
-  const localTurnos = getLocalTurnos();
-  if (remoteTurnos.length > 0 || localTurnos.length === 0) return remoteTurnos;
-
-  const supabase = await getSupabaseClient();
-  const { error } = await supabase
-    .from(SUPABASE_TABLE)
-    .upsert(localTurnos.map(toDbTurno), { onConflict: 'id' });
-
-  if (error) throw error;
-  return localTurnos;
-}
-
 export async function getTurnos() {
   const remoteTurnos = await getRemoteTurnos();
   if (remoteTurnos) {
-    const turnos = await migrateLocalTurnosIfRemoteIsEmpty(remoteTurnos);
-    setLocalTurnos(turnos);
-    return turnos;
+    setLocalTurnos(remoteTurnos);
+    return remoteTurnos;
   }
 
   const storedTurnos = getLocalTurnos();

@@ -40,6 +40,7 @@ Luego abrir `http://localhost:5173`.
 5. Reiniciar la app.
 
 Mientras `src/appConfig.js` no tenga credenciales, la app sigue usando `localStorage`.
+Cuando Supabase esta configurado, Supabase es la fuente de verdad: la app no vuelve a subir turnos viejos guardados en el navegador.
 
 ## Activar login
 
