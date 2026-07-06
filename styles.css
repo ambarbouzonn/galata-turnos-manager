@@ -425,6 +425,21 @@
   .turno-body{flex:1;min-width:0;}
   .turno-nombres{font-size:14px;font-weight:600;color:var(--ink);}
   .turno-nombres .mascota{color:var(--pine);font-weight:600;}
+  .contact-chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:5px;
+    margin-top:5px;
+  }
+  .contact-chip{
+    border-radius:999px;
+    font-size:9.5px;
+    font-weight:900;
+    padding:2px 7px;
+    line-height:1.35;
+  }
+  .phone-chip{background:#E6F2FF;color:#195D98;}
+  .instagram-chip{background:#FCE1F0;color:#8A245C;}
   .turno-meta{font-size:12px;color:var(--ink-soft);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
   .badge{
     font-size:10.5px;font-weight:600;
@@ -468,6 +483,45 @@
     margin-bottom:3px;
   }
   .detail-grid strong{
+    color:var(--ink);
+    font-size:12px;
+    font-weight:700;
+    overflow-wrap:anywhere;
+  }
+  .client-profile{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    border-radius:10px;
+    margin-top:9px;
+    padding:10px;
+  }
+  .client-profile-title{
+    color:var(--pine-dark);
+    font-size:11.5px;
+    font-weight:900;
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .client-profile-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .client-profile-grid div{
+    background:var(--card);
+    border-radius:8px;
+    padding:8px;
+  }
+  .client-profile-grid .detail-full{grid-column:1 / -1;}
+  .client-profile-grid span{
+    display:block;
+    color:var(--ink-soft);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    margin-bottom:3px;
+  }
+  .client-profile-grid strong{
     color:var(--ink);
     font-size:12px;
     font-weight:700;
@@ -693,6 +747,11 @@
     padding:5px 9px;
   }
   .quick-actions button:hover{border-color:var(--pine);}
+  .quick-actions .call-action{
+    background:#E6F2FF;
+    border-color:#B9D9F7;
+    color:#195D98;
+  }
   .quick-actions .whatsapp-action{
     background:var(--sage);
     border-color:var(--sage);
@@ -734,6 +793,7 @@
     .quick-actions{gap:5px;}
     .quick-actions button{font-size:10.5px;padding:5px 8px;}
     .detail-grid{grid-template-columns:1fr;}
+    .client-profile-grid{grid-template-columns:1fr;}
     .upcoming-panel{padding:8px;}
     .upcoming-item{min-width:76px;padding:7px;}
     .time-slot{font-size:11.5px;padding:7px 9px;}

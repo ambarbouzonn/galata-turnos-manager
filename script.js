@@ -183,6 +183,10 @@ function renderDaySummary(dayTurnos){
     .join('');
 }
 
+function selectedDayTitle(){
+  return `${DIAS[selectedDate.getDay()]} ${selectedDate.getDate()} de ${MESES[selectedDate.getMonth()]}`;
+}
+
 function renderUpcomingPanel(){
   const panel = document.getElementById('upcomingPanel');
   if(!panel) return;
@@ -238,6 +242,37 @@ function goToday(){
   render();
 }
 
+function contactChips(t){
+  const chips = [];
+  if(t.telefono) chips.push('<span class="contact-chip phone-chip">Tel</span>');
+  if(t.instagram) chips.push('<span class="contact-chip instagram-chip">IG</span>');
+  return chips.length ? `<div class="contact-chips">${chips.join('')}</div>` : '';
+}
+
+function clientProfile(t){
+  const owner = normalizeLookup(t.dueno);
+  const clientTurnos = turnos
+    .filter(turno => normalizeLookup(turno.dueno) === owner)
+    .sort((a,b)=> (b.fecha+b.hora).localeCompare(a.fecha+a.hora));
+  const mascotas = Array.from(new Set(clientTurnos.map(turno => turno.mascota).filter(Boolean)));
+  const completed = clientTurnos.filter(turno => turno.estado === 'realizado').length;
+  const last = clientTurnos.find(turno => turno.id !== t.id);
+  const lastText = last
+    ? `${last.mascota} · ${last.fecha.split('-').reverse().join('/')} ${last.hora}`
+    : 'Sin turnos anteriores';
+
+  return `
+    <div class="client-profile">
+      <div class="client-profile-title">Ficha de cliente</div>
+      <div class="client-profile-grid">
+        <div><span>Turnos</span><strong>${clientTurnos.length}</strong></div>
+        <div><span>Realizados</span><strong>${completed}</strong></div>
+        <div class="detail-full"><span>Mascotas</span><strong>${escapeHtml(mascotas.join(', ') || t.mascota)}</strong></div>
+        <div class="detail-full"><span>Último registro</span><strong>${escapeHtml(lastText)}</strong></div>
+      </div>
+    </div>`;
+}
+
 function expandedTurnoDetails(t){
   if(expandedTurnoId !== t.id) return '';
   return `
@@ -249,6 +284,7 @@ function expandedTurnoDetails(t){
         <div><span>Cargado por</span><strong>${escapeHtml(t.cargadoPor || '—')}</strong></div>
         ${t.notas ? `<div class="detail-full"><span>Notas</span><strong>${escapeHtml(t.notas)}</strong></div>` : ''}
       </div>
+      ${clientProfile(t)}
       <button type="button" class="edit-turno-btn" data-edit-id="${t.id}">Editar turno</button>
     </div>`;
 }
@@ -278,10 +314,25 @@ function normalizeWhatsAppPhone(phone){
   return `549${digits}`;
 }
 
+function phoneCallHref(phone){
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits ? `tel:${digits}` : '';
+}
+
 function whatsappMessage(turno){
   const d = new Date(turno.fecha+'T00:00:00');
   const fecha = `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
   return `Hola! Te recordamos el turno de ${turno.mascota} para ${fecha} a las ${turno.hora}. Galata Turnos`;
+}
+
+function copyText(text, successMessage){
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text)
+      .then(()=> showToast(successMessage))
+      .catch(()=> showToast('No se pudo copiar automáticamente.'));
+    return;
+  }
+  showToast('Tu navegador no permitió copiar automáticamente.');
 }
 
 function openWhatsApp(id){
@@ -298,34 +349,64 @@ function openWhatsApp(id){
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-function normalizeInstagramUsername(value){
+function callPhone(id){
+  const turno = turnos.find(t=>t.id===id);
+  if(!turno) return;
+
+  const href = phoneCallHref(turno.telefono);
+  if(!href){
+    showToast('Este turno no tiene teléfono.');
+    return;
+  }
+
+  window.location.href = href;
+}
+
+function normalizeInstagramTarget(value){
   const raw = (value || '').trim();
-  if(!raw) return '';
+  if(!raw) return null;
+  const threadMatch = raw.match(/instagram\.com\/direct\/t\/([^/?#]+)/i) || raw.match(/^direct\/t\/([^/?#]+)/i);
+  if(threadMatch && threadMatch[1]){
+    return {
+      type: 'thread',
+      url: `https://www.instagram.com/direct/t/${encodeURIComponent(threadMatch[1])}/`,
+    };
+  }
+  if(/^\d{8,}$/.test(raw)){
+    return {
+      type: 'thread',
+      url: `https://www.instagram.com/direct/t/${encodeURIComponent(raw)}/`,
+    };
+  }
+
   const cleaned = raw.replace(/^@+/, '');
   const instagramMatch = cleaned.match(/(?:instagram\.com|instagr\.am)\/([^/?#]+)/i);
   const username = instagramMatch ? instagramMatch[1] : cleaned.split(/[/?#]/)[0];
-  return username.replace(/^@+/, '');
+  const cleanUsername = username.replace(/^@+/, '');
+  return cleanUsername
+    ? {
+      type: 'profile',
+      url: `https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`,
+    }
+    : null;
 }
 
 function openInstagram(id){
   const turno = turnos.find(t=>t.id===id);
   if(!turno) return;
 
-  const username = normalizeInstagramUsername(turno.instagram);
-  if(!username){
+  const target = normalizeInstagramTarget(turno.instagram);
+  if(!target){
     showToast('Este turno no tiene Instagram.');
     return;
   }
 
-  window.open(`https://www.instagram.com/${encodeURIComponent(username)}/`, '_blank', 'noopener,noreferrer');
+  window.open(target.url, '_blank', 'noopener,noreferrer');
 
-  if(navigator.clipboard && window.isSecureContext){
-    navigator.clipboard.writeText(whatsappMessage(turno))
-      .then(()=> showToast('Mensaje copiado. Tocá Mensaje y pegalo.'))
-      .catch(()=> showToast('Instagram abierto. Copiá el recordatorio manualmente.'));
-  } else {
-    showToast('Instagram abierto. Copiá el recordatorio manualmente.');
-  }
+  copyText(
+    whatsappMessage(turno),
+    target.type === 'thread' ? 'Mensaje copiado. Pegalo en el chat.' : 'Mensaje copiado. Tocá Mensaje y pegalo.'
+  );
 }
 
 function setLoadedByOption(displayName){
@@ -433,6 +514,8 @@ function attachQuickActions(){
         openWhatsApp(button.dataset.id);
       } else if(button.dataset.action === 'instagram'){
         openInstagram(button.dataset.id);
+      } else if(button.dataset.action === 'call'){
+        callPhone(button.dataset.id);
       } else {
         updateTurnoEstado(button.dataset.id, button.dataset.action);
       }
@@ -590,7 +673,7 @@ function renderMonthView(){
 function renderDay(){
   const iso = fmtISO(selectedDate);
   const label = document.getElementById('dayLabel');
-  label.textContent = `${DIAS[selectedDate.getDay()]} ${selectedDate.getDate()} de ${MESES[selectedDate.getMonth()]}`;
+  label.textContent = selectedDayTitle();
 
   const allDayTurnos = turnos.filter(t=>t.fecha===iso).sort((a,b)=> a.hora.localeCompare(b.hora));
   const dayTurnos = allDayTurnos.filter(matchesStatusFilter);
@@ -612,6 +695,7 @@ function renderDay(){
       <div class="turno-hora">${t.hora}</div>
       <div class="turno-body">
         <div class="turno-nombres">${escapeHtml(t.dueno)} · <span class="mascota">${escapeHtml(t.mascota)}</span></div>
+        ${contactChips(t)}
         <div class="turno-meta">
           <span class="badge badge-${t.estado}">${capitalize(t.estado)}</span>
           <span>${escapeHtml(t.servicio)}</span>
@@ -625,6 +709,7 @@ function renderDay(){
           <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
           <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
           <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
+          <button type="button" class="call-action" data-action="call" data-id="${t.id}" ${t.telefono?'':'disabled'}>Llamar</button>
           <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
           <button type="button" class="instagram-action" data-action="instagram" data-id="${t.id}" ${t.instagram?'':'disabled'}>Instagram</button>
         </div>
@@ -700,6 +785,7 @@ function renderSearchResults(query){
       <div class="turno-hora">${t.hora}<div class="search-result-date">${fechaLegible}</div></div>
       <div class="turno-body">
         <div class="turno-nombres">${escapeHtml(t.dueno)} · <span class="mascota">${escapeHtml(t.mascota)}</span></div>
+        ${contactChips(t)}
         <div class="turno-meta">
           <span class="badge badge-${t.estado}">${capitalize(t.estado)}</span>
           <span>${escapeHtml(t.servicio)}</span>
@@ -712,6 +798,7 @@ function renderSearchResults(query){
           <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
           <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
           <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
+          <button type="button" class="call-action" data-action="call" data-id="${t.id}" ${t.telefono?'':'disabled'}>Llamar</button>
           <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
           <button type="button" class="instagram-action" data-action="instagram" data-id="${t.id}" ${t.instagram?'':'disabled'}>Instagram</button>
         </div>
