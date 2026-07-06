@@ -1,10 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
 
   :root{
-    --app-bg:#ECE7E0;
-    --app-bg-soft:#DCD4CA;
-    --paper:#F2EFEA;
-    --paper-line:#D6CDC2;
+    --app-bg:#EFE8DD;
+    --app-bg-soft:#E2D8C9;
+    --paper:#F4EFE7;
+    --paper-line:#D8CDBE;
     --ink:#171614;
     --ink-soft:#6B6660;
     --logo-gray:#7E7D77;
@@ -12,8 +12,8 @@
     --pine:#536F5E;
     --pine-dark:#31473B;
     --mint:#DDE8DE;
-    --mustard:#F28A2E;
-    --mustard-soft:#FFE1BF;
+    --mustard:#C59A63;
+    --mustard-soft:#EFE0C8;
     --coral:#C86F5D;
     --coral-soft:#F0CCC2;
     --violet:#8B5CF6;
@@ -28,9 +28,9 @@
   html,body{margin:0;padding:0;background:var(--app-bg);color:var(--ink);font-family:'Inter',sans-serif;}
   body{
     background-image:
-      radial-gradient(circle at 78% 30%, rgba(242,138,46,.22) 0 120px, transparent 250px),
+      radial-gradient(circle at 78% 30%, rgba(197,154,99,.16) 0 120px, transparent 250px),
       radial-gradient(circle at 16% 12%, rgba(255,255,255,.72) 0 110px, transparent 280px),
-      linear-gradient(180deg, #F4EEE6 0, var(--app-bg) 390px, #F8F4EF 100%);
+      linear-gradient(180deg, #F5EEE4 0, var(--app-bg) 390px, #FAF6EF 100%);
     min-height:100vh;
   }
 
@@ -262,7 +262,7 @@
     gap:3px;
     font-family:'Inter',sans-serif;
   }
-  .month-day:hover{border-color:rgba(242,138,46,.45);}
+  .month-day:hover{border-color:rgba(197,154,99,.45);}
   .month-day.is-empty{visibility:hidden;pointer-events:none;}
   .month-day.is-selected{background:var(--charcoal);color:#fff;}
   .month-day.is-today:not(.is-selected){border-color:var(--mustard);border-width:2px;background:#fff;}
