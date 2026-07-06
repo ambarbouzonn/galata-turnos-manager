@@ -10,7 +10,6 @@ let currentEstado = 'pendiente';
 let unsubscribeAuth = null;
 let currentUserProfile = null;
 let directory = { clientes: [], mascotas: [] };
-let activeStatusFilter = 'todos';
 let expandedTurnoId = null;
 
 function fmtISO(d){
@@ -151,10 +150,6 @@ function turnoMatchesQuery(turno, q){
     .some(key => turno[key] && turno[key].toLowerCase().includes(q));
 }
 
-function matchesStatusFilter(turno){
-  return activeStatusFilter === 'todos' || turno.estado === activeStatusFilter;
-}
-
 function isMissingInstagramColumnError(err){
   const message = `${err && err.message ? err.message : ''} ${err && err.details ? err.details : ''}`.toLowerCase();
   return message.includes('instagram')
@@ -166,12 +161,6 @@ function statusCounts(items){
     acc[estado] = items.filter(t=>t.estado===estado).length;
     return acc;
   }, {});
-}
-
-function renderStatusFilters(){
-  document.querySelectorAll('.status-filter').forEach(button=>{
-    button.classList.toggle('active', button.dataset.filter === activeStatusFilter);
-  });
 }
 
 function renderDaySummary(dayTurnos){
@@ -242,34 +231,18 @@ function goToday(){
   render();
 }
 
-function contactChips(t){
-  const chips = [];
-  if(t.telefono) chips.push('<span class="contact-chip phone-chip">Tel</span>');
-  if(t.instagram) chips.push('<span class="contact-chip instagram-chip">IG</span>');
-  return chips.length ? `<div class="contact-chips">${chips.join('')}</div>` : '';
-}
-
-function clientProfile(t){
-  const owner = normalizeLookup(t.dueno);
-  const clientTurnos = turnos
-    .filter(turno => normalizeLookup(turno.dueno) === owner)
-    .sort((a,b)=> (b.fecha+b.hora).localeCompare(a.fecha+a.hora));
-  const mascotas = Array.from(new Set(clientTurnos.map(turno => turno.mascota).filter(Boolean)));
-  const completed = clientTurnos.filter(turno => turno.estado === 'realizado').length;
-  const last = clientTurnos.find(turno => turno.id !== t.id);
-  const lastText = last
-    ? `${last.mascota} · ${last.fecha.split('-').reverse().join('/')} ${last.hora}`
-    : 'Sin turnos anteriores';
-
+function contactRail(t){
   return `
-    <div class="client-profile">
-      <div class="client-profile-title">Ficha de cliente</div>
-      <div class="client-profile-grid">
-        <div><span>Turnos</span><strong>${clientTurnos.length}</strong></div>
-        <div><span>Realizados</span><strong>${completed}</strong></div>
-        <div class="detail-full"><span>Mascotas</span><strong>${escapeHtml(mascotas.join(', ') || t.mascota)}</strong></div>
-        <div class="detail-full"><span>Último registro</span><strong>${escapeHtml(lastText)}</strong></div>
-      </div>
+    <div class="contact-rail" aria-label="Contacto">
+      <button type="button" class="contact-icon-btn call-action" data-action="call" data-id="${t.id}" ${t.telefono?'':'disabled'} aria-label="Llamar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.8-.4 1.2-.3 1.3.4 2.6.6 4 .6.7 0 1.2.5 1.2 1.2v3.5c0 .7-.5 1.2-1.2 1.2C10.7 21.4 2.6 13.3 2.6 3.4c0-.7.5-1.2 1.2-1.2h3.5c.7 0 1.2.5 1.2 1.2 0 1.4.2 2.7.6 4 .1.4 0 .9-.3 1.2l-2.2 2.2z"/></svg>
+      </button>
+      <button type="button" class="contact-icon-btn whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'} aria-label="WhatsApp">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.1 2.2a9.7 9.7 0 0 0-8.4 14.6L2.6 21.8l5.1-1.3a9.6 9.6 0 0 0 4.4 1.1 9.7 9.7 0 1 0 0-19.4zm0 17.7a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3a8 8 0 1 1 6.8 3.7zm4.4-5.9c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.6.1-.2.2-.6.8-.8 1-.1.2-.3.2-.5.1-.2-.1-1-.4-1.9-1.2-.7-.6-1.2-1.4-1.3-1.6-.1-.2 0-.4.1-.5l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.2-.9.9-.9 2.2s.9 2.5 1 2.7c.1.2 1.8 2.8 4.4 3.9.6.3 1.1.4 1.5.5.6.2 1.2.2 1.6.1.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1-.1-.2-.3-.3-.5-.4z"/></svg>
+      </button>
+      <button type="button" class="contact-icon-btn instagram-action" data-action="instagram" data-id="${t.id}" ${t.instagram?'':'disabled'} aria-label="Instagram">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 2.8h9.2c2.6 0 4.6 2 4.6 4.6v9.2c0 2.6-2 4.6-4.6 4.6H7.4c-2.6 0-4.6-2-4.6-4.6V7.4c0-2.6 2-4.6 4.6-4.6zm0 1.8c-1.6 0-2.8 1.2-2.8 2.8v9.2c0 1.6 1.2 2.8 2.8 2.8h9.2c1.6 0 2.8-1.2 2.8-2.8V7.4c0-1.6-1.2-2.8-2.8-2.8H7.4zm4.6 3.2a4.2 4.2 0 1 1 0 8.4 4.2 4.2 0 0 1 0-8.4zm0 1.8a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8zm4.6-2.5a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2z"/></svg>
+      </button>
     </div>`;
 }
 
@@ -284,7 +257,6 @@ function expandedTurnoDetails(t){
         <div><span>Cargado por</span><strong>${escapeHtml(t.cargadoPor || '—')}</strong></div>
         ${t.notas ? `<div class="detail-full"><span>Notas</span><strong>${escapeHtml(t.notas)}</strong></div>` : ''}
       </div>
-      ${clientProfile(t)}
       <button type="button" class="edit-turno-btn" data-edit-id="${t.id}">Editar turno</button>
     </div>`;
 }
@@ -507,7 +479,7 @@ async function updateTurnoEstado(id, estado){
 }
 
 function attachQuickActions(){
-  document.querySelectorAll('.quick-actions button').forEach(button=>{
+  document.querySelectorAll('.turno-row button[data-action]').forEach(button=>{
     button.onclick = (event)=>{
       event.stopPropagation();
       if(button.dataset.action === 'whatsapp'){
@@ -676,7 +648,7 @@ function renderDay(){
   label.textContent = selectedDayTitle();
 
   const allDayTurnos = turnos.filter(t=>t.fecha===iso).sort((a,b)=> a.hora.localeCompare(b.hora));
-  const dayTurnos = allDayTurnos.filter(matchesStatusFilter);
+  const dayTurnos = allDayTurnos;
   renderDaySummary(allDayTurnos);
   document.getElementById('dayCount').textContent = `${dayTurnos.length} turno${dayTurnos.length!==1?'s':''}`;
 
@@ -688,36 +660,28 @@ function renderDay(){
     </div>`;
     return;
   }
-  ledger.innerHTML = dayTurnos.map(t=>{
-    const color = SERVICIO_COLOR[t.servicio] || '#8A7E6A';
-    return `
+  ledger.innerHTML = dayTurnos.map(t=>`
     <div class="turno-row estado-${t.estado}" data-id="${t.id}">
       <div class="turno-hora">${t.hora}</div>
       <div class="turno-body">
         <div class="turno-nombres">${escapeHtml(t.dueno)} · <span class="mascota">${escapeHtml(t.mascota)}</span></div>
-        ${contactChips(t)}
         <div class="turno-meta">
           <span class="badge badge-${t.estado}">${capitalize(t.estado)}</span>
           <span>${escapeHtml(t.servicio)}</span>
           ${t.tipoMascota ? `<span>· ${escapeHtml(t.tipoMascota)}</span>` : ''}
-          ${t.telefono ? `<span>· ${escapeHtml(t.telefono)}</span>` : ''}
-          ${t.instagram ? `<span>· ${escapeHtml(t.instagram)}</span>` : ''}
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
-        <div class="who-badge">Cargó: ${t.cargadoPor||'—'}</div>
         <div class="quick-actions">
-          <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
-          <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
-          <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
-          <button type="button" class="call-action" data-action="call" data-id="${t.id}" ${t.telefono?'':'disabled'}>Llamar</button>
-          <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
-          <button type="button" class="instagram-action" data-action="instagram" data-id="${t.id}" ${t.instagram?'':'disabled'}>Instagram</button>
+          <div class="status-actions" aria-label="Estado del turno">
+            <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
+            <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
+            <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
+          </div>
         </div>
         ${expandedTurnoDetails(t)}
       </div>
-      <div class="stamp">${PAW_SVG(color)}</div>
-    </div>`;
-  }).join('');
+      ${contactRail(t)}
+    </div>`).join('');
 
   ledger.querySelectorAll('.turno-row').forEach(row=>{
     row.onclick = ()=>{
@@ -731,7 +695,6 @@ function renderDay(){
 
 function render(){
   renderAlertBanner();
-  renderStatusFilters();
   renderMonthView();
   renderUpcomingPanel();
   const query = document.getElementById('searchInput').value.trim();
@@ -763,7 +726,7 @@ function renderSearchResults(query){
   document.getElementById('dayLabel').textContent = `Resultados para "${query}"`;
   const q = query.toLowerCase();
   const matches = turnos
-    .filter(t => matchesStatusFilter(t) && turnoMatchesQuery(t, q))
+    .filter(t => turnoMatchesQuery(t, q))
     .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
 
   document.getElementById('dayCount').textContent = `${matches.length} resultado${matches.length!==1?'s':''}`;
@@ -777,7 +740,6 @@ function renderSearchResults(query){
     return;
   }
   ledger.innerHTML = matches.map(t=>{
-    const color = SERVICIO_COLOR[t.servicio] || '#8A7E6A';
     const d = new Date(t.fecha+'T00:00:00');
     const fechaLegible = `${DIAS_CORTAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()].slice(0,3)}`;
     return `
@@ -785,26 +747,21 @@ function renderSearchResults(query){
       <div class="turno-hora">${t.hora}<div class="search-result-date">${fechaLegible}</div></div>
       <div class="turno-body">
         <div class="turno-nombres">${escapeHtml(t.dueno)} · <span class="mascota">${escapeHtml(t.mascota)}</span></div>
-        ${contactChips(t)}
         <div class="turno-meta">
           <span class="badge badge-${t.estado}">${capitalize(t.estado)}</span>
           <span>${escapeHtml(t.servicio)}</span>
-          ${t.telefono ? `<span>· ${escapeHtml(t.telefono)}</span>` : ''}
-          ${t.instagram ? `<span>· ${escapeHtml(t.instagram)}</span>` : ''}
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
-        <div class="who-badge">Cargó: ${t.cargadoPor||'—'}</div>
         <div class="quick-actions">
-          <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
-          <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
-          <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
-          <button type="button" class="call-action" data-action="call" data-id="${t.id}" ${t.telefono?'':'disabled'}>Llamar</button>
-          <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
-          <button type="button" class="instagram-action" data-action="instagram" data-id="${t.id}" ${t.instagram?'':'disabled'}>Instagram</button>
+          <div class="status-actions" aria-label="Estado del turno">
+            <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
+            <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
+            <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
+          </div>
         </div>
         ${expandedTurnoDetails(t)}
       </div>
-      <div class="stamp">${PAW_SVG(color)}</div>
+      ${contactRail(t)}
     </div>`;
   }).join('');
   ledger.querySelectorAll('.turno-row').forEach(row=>{
@@ -837,13 +794,6 @@ document.getElementById('f_hora').addEventListener('input', ()=>{
   renderTimeSlots();
   renderSlotWarning();
 });
-document.querySelectorAll('.status-filter').forEach(button=>{
-  button.onclick = ()=>{
-    activeStatusFilter = button.dataset.filter;
-    render();
-  };
-});
-
 document.getElementById('loginForm').onsubmit = async (e)=>{
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
