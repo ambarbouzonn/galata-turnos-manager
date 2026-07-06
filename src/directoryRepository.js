@@ -26,6 +26,7 @@ export function buildDirectoryFromTurnos(turnos) {
         nombre: turno.dueno,
         nombreNormalizado: normalizeName(turno.dueno),
         telefono: turno.telefono || '',
+        instagram: turno.instagram || '',
       })),
     (cliente) => cliente.nombreNormalizado
   );
@@ -53,7 +54,7 @@ export async function getDirectory(turnos) {
 
   try {
     const [{ data: clientes, error: clientesError }, { data: mascotas, error: mascotasError }] = await Promise.all([
-      supabase.from('clientes').select('id, nombre, nombre_normalizado, telefono').order('nombre'),
+      supabase.from('clientes').select('id, nombre, nombre_normalizado, telefono, instagram').order('nombre'),
       supabase.from('mascotas').select('id, cliente_id, nombre, nombre_normalizado, tipo_mascota, clientes(nombre, nombre_normalizado)').order('nombre'),
     ]);
 
@@ -65,6 +66,7 @@ export async function getDirectory(turnos) {
         nombre: cliente.nombre,
         nombreNormalizado: cliente.nombre_normalizado,
         telefono: cliente.telefono || '',
+        instagram: cliente.instagram || '',
       })),
       mascotas: mascotas.map((mascota) => ({
         id: mascota.id,
@@ -89,6 +91,7 @@ export async function upsertDirectoryFromTurno(turno) {
     nombre: turno.dueno,
     nombre_normalizado: normalizeName(turno.dueno),
     telefono: turno.telefono || null,
+    instagram: turno.instagram || null,
   };
 
   const { data: cliente, error: clienteError } = await supabase

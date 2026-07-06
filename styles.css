@@ -672,6 +672,11 @@
     border-color:var(--sage);
     color:var(--pine-dark);
   }
+  .quick-actions .instagram-action{
+    background:#f3d8e8;
+    border-color:#eab8d4;
+    color:#8a2d63;
+  }
   .quick-actions button:disabled{
     cursor:default;
     opacity:.45;

@@ -7,6 +7,7 @@ create table if not exists public.turnos (
   tipo_mascota text,
   servicio text not null,
   telefono text,
+  instagram text,
   notas text,
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'confirmado', 'realizado', 'cancelado')),
@@ -35,6 +36,9 @@ execute function public.set_updated_at();
 create unique index if not exists turnos_unique_active_slot
 on public.turnos (fecha, hora)
 where estado <> 'cancelado';
+
+alter table public.turnos
+add column if not exists instagram text;
 
 alter table public.turnos enable row level security;
 

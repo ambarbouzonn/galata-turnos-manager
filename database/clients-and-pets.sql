@@ -3,6 +3,7 @@ create table if not exists public.clientes (
   nombre text not null,
   nombre_normalizado text not null unique,
   telefono text,
+  instagram text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -18,6 +19,9 @@ create table if not exists public.mascotas (
   updated_at timestamptz not null default now(),
   unique (cliente_id, nombre_normalizado)
 );
+
+alter table public.clientes
+add column if not exists instagram text;
 
 drop trigger if exists clientes_set_updated_at on public.clientes;
 drop trigger if exists mascotas_set_updated_at on public.mascotas;
@@ -84,18 +88,20 @@ to authenticated
 using (true)
 with check (true);
 
-insert into public.clientes (nombre, nombre_normalizado, telefono)
+insert into public.clientes (nombre, nombre_normalizado, telefono, instagram)
 select distinct on (lower(regexp_replace(trim(dueno), '\s+', ' ', 'g')))
   trim(dueno),
   lower(regexp_replace(trim(dueno), '\s+', ' ', 'g')),
-  nullif(trim(coalesce(telefono, '')), '')
+  nullif(trim(coalesce(telefono, '')), ''),
+  nullif(trim(coalesce(instagram, '')), '')
 from public.turnos
 where nullif(trim(coalesce(dueno, '')), '') is not null
 order by lower(regexp_replace(trim(dueno), '\s+', ' ', 'g')), updated_at desc
 on conflict (nombre_normalizado) do update
 set
   nombre = excluded.nombre,
-  telefono = coalesce(excluded.telefono, public.clientes.telefono);
+  telefono = coalesce(excluded.telefono, public.clientes.telefono),
+  instagram = coalesce(excluded.instagram, public.clientes.instagram);
 
 insert into public.mascotas (cliente_id, nombre, nombre_normalizado, tipo_mascota, notas)
 select distinct on (

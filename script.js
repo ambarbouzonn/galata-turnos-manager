@@ -147,12 +147,18 @@ function renderTimeSlots(){
 }
 
 function turnoMatchesQuery(turno, q){
-  return ['dueno','mascota','telefono','servicio','tipoMascota','notas','cargadoPor']
+  return ['dueno','mascota','telefono','instagram','servicio','tipoMascota','notas','cargadoPor']
     .some(key => turno[key] && turno[key].toLowerCase().includes(q));
 }
 
 function matchesStatusFilter(turno){
   return activeStatusFilter === 'todos' || turno.estado === activeStatusFilter;
+}
+
+function isMissingInstagramColumnError(err){
+  const message = `${err && err.message ? err.message : ''} ${err && err.details ? err.details : ''}`.toLowerCase();
+  return message.includes('instagram')
+    && (message.includes('column') || message.includes('schema cache'));
 }
 
 function statusCounts(items){
@@ -238,6 +244,7 @@ function expandedTurnoDetails(t){
     <div class="turno-details">
       <div class="detail-grid">
         ${t.telefono ? `<div><span>Teléfono</span><strong>${escapeHtml(t.telefono)}</strong></div>` : ''}
+        ${t.instagram ? `<div><span>Instagram</span><strong>${escapeHtml(t.instagram)}</strong></div>` : ''}
         ${t.tipoMascota ? `<div><span>Tipo / raza</span><strong>${escapeHtml(t.tipoMascota)}</strong></div>` : ''}
         <div><span>Cargado por</span><strong>${escapeHtml(t.cargadoPor || '—')}</strong></div>
         ${t.notas ? `<div class="detail-full"><span>Notas</span><strong>${escapeHtml(t.notas)}</strong></div>` : ''}
@@ -288,6 +295,29 @@ function openWhatsApp(id){
   }
 
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage(turno))}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function normalizeInstagramUrl(value){
+  const raw = (value || '').trim();
+  if(!raw) return '';
+  const cleaned = raw.replace(/^@+/, '');
+  if(/^https?:\/\//i.test(cleaned)) return cleaned;
+  const instagramMatch = cleaned.match(/(?:instagram\.com|instagr\.am)\/([^/?#]+)/i);
+  const username = instagramMatch ? instagramMatch[1] : cleaned.split(/[/?#]/)[0];
+  return username ? `https://www.instagram.com/${encodeURIComponent(username)}/` : '';
+}
+
+function openInstagram(id){
+  const turno = turnos.find(t=>t.id===id);
+  if(!turno) return;
+
+  const url = normalizeInstagramUrl(turno.instagram);
+  if(!url){
+    showToast('Este turno no tiene Instagram.');
+    return;
+  }
+
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
@@ -394,6 +424,8 @@ function attachQuickActions(){
       event.stopPropagation();
       if(button.dataset.action === 'whatsapp'){
         openWhatsApp(button.dataset.id);
+      } else if(button.dataset.action === 'instagram'){
+        openInstagram(button.dataset.id);
       } else {
         updateTurnoEstado(button.dataset.id, button.dataset.action);
       }
@@ -432,6 +464,9 @@ function autofillClient(){
   renderPetSuggestions();
   if(client && client.telefono && !document.getElementById('f_telefono').value.trim()){
     document.getElementById('f_telefono').value = client.telefono;
+  }
+  if(client && client.instagram && !document.getElementById('f_instagram').value.trim()){
+    document.getElementById('f_instagram').value = client.instagram;
   }
   renderPetHistory();
 }
@@ -575,6 +610,7 @@ function renderDay(){
           <span>${escapeHtml(t.servicio)}</span>
           ${t.tipoMascota ? `<span>· ${escapeHtml(t.tipoMascota)}</span>` : ''}
           ${t.telefono ? `<span>· ${escapeHtml(t.telefono)}</span>` : ''}
+          ${t.instagram ? `<span>· ${escapeHtml(t.instagram)}</span>` : ''}
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
         <div class="who-badge">Cargó: ${t.cargadoPor||'—'}</div>
@@ -583,6 +619,7 @@ function renderDay(){
           <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
           <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
           <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
+          <button type="button" class="instagram-action" data-action="instagram" data-id="${t.id}" ${t.instagram?'':'disabled'}>Instagram</button>
         </div>
         ${expandedTurnoDetails(t)}
       </div>
@@ -660,6 +697,7 @@ function renderSearchResults(query){
           <span class="badge badge-${t.estado}">${capitalize(t.estado)}</span>
           <span>${escapeHtml(t.servicio)}</span>
           ${t.telefono ? `<span>· ${escapeHtml(t.telefono)}</span>` : ''}
+          ${t.instagram ? `<span>· ${escapeHtml(t.instagram)}</span>` : ''}
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
         <div class="who-badge">Cargó: ${t.cargadoPor||'—'}</div>
@@ -668,6 +706,7 @@ function renderSearchResults(query){
           <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
           <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
           <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
+          <button type="button" class="instagram-action" data-action="instagram" data-id="${t.id}" ${t.instagram?'':'disabled'}>Instagram</button>
         </div>
         ${expandedTurnoDetails(t)}
       </div>
@@ -812,6 +851,7 @@ function openEdit(id){
   document.getElementById('f_tipoMascota').value = t.tipoMascota||'';
   document.getElementById('f_servicio').value = t.servicio;
   document.getElementById('f_telefono').value = t.telefono||'';
+  document.getElementById('f_instagram').value = t.instagram||'';
   document.getElementById('f_notas').value = t.notas||'';
   setLoadedByOption(t.cargadoPor || 'Dueña');
   document.getElementById('f_cargadoPor').value = t.cargadoPor||'Dueña';
@@ -891,6 +931,7 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
       tipoMascota: document.getElementById('f_tipoMascota').value.trim(),
       servicio: document.getElementById('f_servicio').value,
       telefono: document.getElementById('f_telefono').value.trim(),
+      instagram: document.getElementById('f_instagram').value.trim(),
       notas: document.getElementById('f_notas').value.trim(),
       estado: currentEstado,
       cargadoPor: document.getElementById('f_cargadoPor').value
@@ -903,13 +944,13 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
       return;
     }
 
+    await saveTurno(data);
     if(editingId){
       const idx = turnos.findIndex(t=>t.id===editingId);
       turnos[idx] = data;
     } else {
       turnos.push(data);
     }
-    await saveTurno(data);
     directory = await getDirectory(turnos);
     renderDirectorySuggestions();
     document.getElementById('overlay').classList.remove('open');
@@ -922,6 +963,8 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
     const message = err && err.message ? err.message : '';
     if(message.includes('turnos_unique_active_slot') || message.includes('duplicate key')){
       showToast('Ese horario ya esta ocupado.');
+    } else if(isMissingInstagramColumnError(err)){
+      showToast('Falta agregar la columna Instagram en Supabase.');
     } else {
       showToast('Algo falló al guardar. Probá de nuevo.');
     }
