@@ -298,27 +298,34 @@ function openWhatsApp(id){
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-function normalizeInstagramUrl(value){
+function normalizeInstagramUsername(value){
   const raw = (value || '').trim();
   if(!raw) return '';
   const cleaned = raw.replace(/^@+/, '');
-  if(/^https?:\/\//i.test(cleaned)) return cleaned;
   const instagramMatch = cleaned.match(/(?:instagram\.com|instagr\.am)\/([^/?#]+)/i);
   const username = instagramMatch ? instagramMatch[1] : cleaned.split(/[/?#]/)[0];
-  return username ? `https://www.instagram.com/${encodeURIComponent(username)}/` : '';
+  return username.replace(/^@+/, '');
 }
 
 function openInstagram(id){
   const turno = turnos.find(t=>t.id===id);
   if(!turno) return;
 
-  const url = normalizeInstagramUrl(turno.instagram);
-  if(!url){
+  const username = normalizeInstagramUsername(turno.instagram);
+  if(!username){
     showToast('Este turno no tiene Instagram.');
     return;
   }
 
-  window.open(url, '_blank', 'noopener,noreferrer');
+  window.open(`https://www.instagram.com/${encodeURIComponent(username)}/`, '_blank', 'noopener,noreferrer');
+
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(whatsappMessage(turno))
+      .then(()=> showToast('Mensaje copiado. Tocá Mensaje y pegalo.'))
+      .catch(()=> showToast('Instagram abierto. Copiá el recordatorio manualmente.'));
+  } else {
+    showToast('Instagram abierto. Copiá el recordatorio manualmente.');
+  }
 }
 
 function setLoadedByOption(displayName){
