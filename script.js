@@ -597,6 +597,10 @@ function renderSessionBadge(user, profile){
 }
 
 async function showAppForUser(user, profile = null){
+  if(document.activeElement && typeof document.activeElement.blur === 'function'){
+    document.activeElement.blur();
+  }
+  window.scrollTo(0, 0);
   currentUserProfile = profile || await getUserProfile(user);
   document.body.classList.add('authenticated');
   document.getElementById('loginError').textContent = '';
