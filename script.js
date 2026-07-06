@@ -1,4 +1,5 @@
-const STORAGE_KEY = 'turnos-vete';
+import { deleteTurno, getTurnos, saveTurno } from './src/turnosRepository.js';
+
 let turnos = [];
 let selectedDate = new Date();
 let weekStart = getMonday(new Date());
@@ -34,21 +35,12 @@ const SERVICIO_COLOR = {
 
 async function loadTurnos(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, true);
-    turnos = res && res.value ? JSON.parse(res.value) : [];
+    turnos = await getTurnos();
   }catch(e){
     turnos = [];
   }
   render();
 }
-async function saveTurnos(){
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(turnos), true);
-  }catch(e){
-    showToast('No se pudo guardar. Probá de nuevo.');
-  }
-}
-
 function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -270,11 +262,18 @@ document.getElementById('overlay').onclick = (e)=>{ if(e.target.id==='overlay') 
 document.getElementById('btnDelete').onclick = async ()=>{
   if(!editingId) return;
   if(!confirm('¿Eliminar este turno?')) return;
+  const deletedId = editingId;
   turnos = turnos.filter(t=>t.id!==editingId);
-  await saveTurnos();
-  document.getElementById('overlay').classList.remove('open');
-  render();
-  showToast('Turno eliminado');
+  try{
+    await deleteTurno(deletedId);
+    document.getElementById('overlay').classList.remove('open');
+    render();
+    showToast('Turno eliminado');
+  }catch(err){
+    console.error(err);
+    await loadTurnos();
+    showToast('No se pudo eliminar. Probá de nuevo.');
+  }
 };
 
 function marcarInvalido(input){
@@ -329,7 +328,7 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
     } else {
       turnos.push(data);
     }
-    await saveTurnos();
+    await saveTurno(data);
     document.getElementById('overlay').classList.remove('open');
     selectedDate = new Date(data.fecha+'T00:00:00');
     weekStart = getMonday(selectedDate);
