@@ -4,7 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Galata Turnos</title>
-<link rel="manifest" href="icons\manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-icon-180x180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+<link rel="shortcut icon" href="icons/favicon.ico">
+<link rel="manifest" href="icons/manifest.json">
+<meta name="msapplication-config" content="icons/browserconfig.xml">
+<meta name="theme-color" content="#1f6f54">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -18,7 +24,7 @@
         <input type="email" id="loginEmail" autocomplete="email" required>
       </div>
       <div class="field">
-        <label>Contrasena</label>
+        <label>Contrase&ntilde;a</label>
         <input type="password" id="loginPassword" autocomplete="current-password" required>
       </div>
       <button type="submit" class="btn btn-primary" id="loginButton">Ingresar</button>
@@ -32,7 +38,7 @@
     <div class="spiral">
       <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
     </div>
-    <h1>🐾 Galata Turnos</h1>
+    <h1>&#128062; Galata Turnos</h1>
     <div class="subtitle" id="subtitle">Cargando turnos...</div>
     <div class="session-badge" id="sessionBadge"></div>
     <button class="logout-btn" id="logoutButton">Salir</button>
@@ -42,14 +48,14 @@
     <div class="paw-alert" id="pawAlertIcon"></div>
     <div class="alert-text" id="alertText">
       Turnos de hoy sin confirmar
-      <small>Tocá para ir al día de hoy</small>
+      <small>Toc&aacute; para ir al d&iacute;a de hoy</small>
     </div>
-    <div class="alert-arrow">›</div>
+    <div class="alert-arrow">&rsaquo;</div>
   </div>
 
   <div class="search-box">
-    <input type="text" id="searchInput" placeholder="Buscar por dueño/a o mascota...">
-    <button class="clear-search" id="clearSearch">✕</button>
+    <input type="text" id="searchInput" placeholder="Buscar por due&ntilde;o/a o mascota...">
+    <button class="clear-search" id="clearSearch">&times;</button>
   </div>
 
   <div class="status-filters" id="statusFilters">
@@ -62,10 +68,10 @@
 
   <div class="month-card">
     <div class="month-head">
-      <button class="month-arrow" id="prevMonth" type="button">‹</button>
+      <button class="month-arrow" id="prevMonth" type="button">&lsaquo;</button>
       <button class="month-title" id="monthTitle" type="button"></button>
       <button class="today-btn" id="todayButton" type="button">Hoy</button>
-      <button class="month-arrow" id="nextMonth" type="button">›</button>
+      <button class="month-arrow" id="nextMonth" type="button">&rsaquo;</button>
     </div>
     <div class="month-weekdays">
       <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
@@ -106,8 +112,8 @@
       <div class="time-slots" id="timeSlots"></div>
       <div class="form-section-title">Cliente</div>
       <div class="field">
-        <label>Dueño/a de la mascota</label>
-        <input type="text" id="f_dueno" list="clientesList" placeholder="Ej: María López">
+        <label>Due&ntilde;o/a de la mascota</label>
+        <input type="text" id="f_dueno" list="clientesList" placeholder="Ej: Mar&iacute;a L&oacute;pez">
         <datalist id="clientesList"></datalist>
       </div>
       <div class="row2">
@@ -125,15 +131,15 @@
         <div class="field">
           <label>Servicio</label>
           <select id="f_servicio">
-            <option value="Baño">Baño</option>
+            <option value="Ba&ntilde;o">Ba&ntilde;o</option>
             <option value="Corte">Corte</option>
-            <option value="Baño y corte">Baño y corte</option>
+            <option value="Ba&ntilde;o y corte">Ba&ntilde;o y corte</option>
             <option value="Deslanado">Deslanado</option>
             <option value="Otro">Otro</option>
           </select>
         </div>
         <div class="field">
-          <label>Teléfono</label>
+          <label>Tel&eacute;fono</label>
           <input type="tel" id="f_telefono" placeholder="11 1234 5678">
         </div>
       </div>
