@@ -527,6 +527,7 @@
     position:fixed;inset:0;background:rgba(30,26,20,.45);
     display:none;align-items:flex-end;justify-content:center;
     z-index:30;
+    overflow:hidden;
   }
   .overlay.open{display:flex;}
   @media (min-width:640px){
@@ -537,9 +538,16 @@
     width:100%;max-width:480px;
     border-radius:20px 20px 0 0;
     padding:22px 20px 24px;
-    max-height:88vh;overflow-y:auto;
+    max-height:88vh;
+    overflow-y:auto;
+    overflow-x:hidden;
     box-shadow:0 -8px 30px rgba(0,0,0,.15);
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
   }
+  .card-form *,
+  .card-form *::before,
+  .card-form *::after{min-width:0;}
   @media (min-width:640px){
     .card-form{border-radius:16px;}
   }
@@ -572,6 +580,7 @@
     display:flex;
     gap:6px;
     overflow-x:auto;
+    max-width:100%;
     scrollbar-width:none;
     padding:0 0 12px;
   }
@@ -596,7 +605,10 @@
     margin-bottom:4px;
   }
   .field input,.field select,.field textarea{
-    width:100%;padding:10px 11px;
+    display:block;
+    width:100%;
+    max-width:100%;
+    padding:10px 11px;
     border:1px solid var(--paper-line);border-radius:9px;
     font-family:'Inter',sans-serif;font-size:14px;color:var(--ink);
     background:var(--card);
@@ -604,24 +616,26 @@
   .field textarea{resize:vertical;min-height:52px;font-family:'Inter',sans-serif;}
   .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--pine);outline-offset:1px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .estado-choices{display:flex;gap:6px;flex-wrap:wrap;}
+  .estado-choices{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:6px;}
   .estado-chip{
-    padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;
+    padding:7px 8px;border-radius:20px;font-size:12px;font-weight:600;
     border:1.5px solid var(--paper-line);cursor:pointer;background:var(--card);color:var(--ink-soft);
+    text-align:center;
   }
   .estado-chip.active-pendiente{background:var(--mustard-soft);border-color:var(--mustard);color:#8A5A0F;}
   .estado-chip.active-confirmado{background:var(--sage);border-color:var(--pine);color:var(--pine-dark);}
   .estado-chip.active-realizado{background:var(--pine);border-color:var(--pine);color:#fff;}
   .estado-chip.active-cancelado{background:#F0DEDA;border-color:var(--coral);color:var(--coral);}
-  .form-actions{display:flex;gap:8px;margin-top:18px;}
+  .form-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px;}
   .btn{
-    flex:1;padding:12px;border-radius:10px;border:none;
+    width:100%;
+    padding:12px;border-radius:10px;border:none;
     font-weight:700;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif;
   }
   .btn-primary{background:var(--pine);color:#fff;}
   .btn-primary:hover{background:var(--pine-dark);}
   .btn-secondary{background:var(--card);color:var(--ink-soft);border:1px solid var(--paper-line);}
-  .btn-delete{background:none;color:var(--coral);border:1px solid var(--coral);flex:0 0 auto;padding:12px 16px;}
+  .btn-delete{background:none;color:var(--coral);border:1px solid var(--coral);padding:12px 16px;}
 
   .toast{
     position:fixed;top:16px;left:50%;transform:translateX(-50%);
@@ -695,8 +709,30 @@
     .stamp{display:none;}
     .fab{right:16px;bottom:18px;width:54px;height:54px;transform:none;}
     .fab:hover{transform:scale(1.04);}
-    .card-form{padding:18px 14px 20px;max-height:92vh;}
+    .overlay{
+      align-items:flex-end;
+      justify-content:center;
+      width:100vw;
+      max-width:100vw;
+    }
+    .card-form{
+      width:100vw;
+      max-width:100vw;
+      max-height:calc(100dvh - 10px);
+      border-radius:16px 16px 0 0;
+      padding:16px 12px calc(18px + env(safe-area-inset-bottom));
+      margin:0;
+    }
+    .card-form h2{font-size:18px;}
+    .card-form .form-sub{margin-bottom:12px;}
     .row2{grid-template-columns:1fr;gap:0;}
-    .form-actions{flex-wrap:wrap;}
-    .btn-delete{order:3;flex:1 1 100%;}
+    .estado-choices{grid-template-columns:1fr 1fr;}
+    .form-actions{grid-template-columns:1fr 1fr;}
+    .btn-delete{grid-column:1 / -1;order:3;}
+    .time-slots{
+      margin-left:-2px;
+      margin-right:-2px;
+      padding-left:2px;
+      padding-right:2px;
+    }
   }
