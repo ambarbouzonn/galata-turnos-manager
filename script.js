@@ -11,6 +11,7 @@ let unsubscribeAuth = null;
 let currentUserProfile = null;
 let directory = { clientes: [], mascotas: [] };
 let expandedTurnoId = null;
+let compactMode = localStorage.getItem('galata-compact-mode') === '1';
 
 function fmtISO(d){
   const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
@@ -32,6 +33,14 @@ const PAW_SVG = (color) => `
 </svg>`;
 const SERVICIO_COLOR = {
   'Baño':'#2B5D52','Corte':'#E8A33D','Baño y corte':'#D96A5C','Deslanado':'#7A8B6F','Otro':'#8A7E6A'
+};
+
+const SERVICIO_CLASS = {
+  'Baño': 'servicio-bano',
+  'Corte': 'servicio-corte',
+  'Baño y corte': 'servicio-bano-corte',
+  'Deslanado': 'servicio-deslanado',
+  'Otro': 'servicio-otro'
 };
 
 const ESTADOS = ['pendiente','confirmado','realizado','cancelado'];
@@ -150,6 +159,10 @@ function turnoMatchesQuery(turno, q){
     .some(key => turno[key] && turno[key].toLowerCase().includes(q));
 }
 
+function servicioClass(servicio){
+  return SERVICIO_CLASS[servicio] || 'servicio-otro';
+}
+
 function isMissingInstagramColumnError(err){
   const message = `${err && err.message ? err.message : ''} ${err && err.details ? err.details : ''}`.toLowerCase();
   return message.includes('instagram')
@@ -170,6 +183,41 @@ function renderDaySummary(dayTurnos){
     .filter(estado => counts[estado] > 0)
     .map(estado => `<span class="summary-pill summary-${estado}">${counts[estado]} ${ESTADO_LABEL[estado].toLowerCase()}</span>`)
     .join('');
+}
+
+function renderCompactToggle(){
+  const button = document.getElementById('compactToggle');
+  if(!button) return;
+  button.classList.toggle('active', compactMode);
+}
+
+function renderNextTurnoPanel(dayTurnos){
+  const panel = document.getElementById('nextTurnoPanel');
+  if(!panel) return;
+  const isToday = fmtISO(selectedDate) === todayISO();
+  const now = new Date();
+  const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const next = dayTurnos.find(t => t.estado !== 'cancelado' && (!isToday || t.hora >= currentTime));
+  if(!next){
+    panel.classList.remove('show');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.classList.add('show');
+  panel.innerHTML = `
+    <div>
+      <span>${isToday ? 'Próximo turno' : 'Primer turno del día'}</span>
+      <strong>${escapeHtml(next.hora)} · ${escapeHtml(next.mascota)}</strong>
+      <small>${escapeHtml(next.dueno)} · ${escapeHtml(next.servicio)}</small>
+    </div>
+    <button type="button" data-next-id="${next.id}">Ver</button>`;
+  panel.querySelector('button').onclick = ()=>{
+    expandedTurnoId = next.id;
+    render();
+    Array.from(document.querySelectorAll('.turno-row'))
+      .find(row => row.dataset.id === next.id)
+      ?.scrollIntoView({ behavior:'smooth', block:'center' });
+  };
 }
 
 function selectedDayTitle(){
@@ -650,6 +698,8 @@ function renderDay(){
   const allDayTurnos = turnos.filter(t=>t.fecha===iso).sort((a,b)=> a.hora.localeCompare(b.hora));
   const dayTurnos = allDayTurnos;
   renderDaySummary(allDayTurnos);
+  renderNextTurnoPanel(allDayTurnos);
+  renderCompactToggle();
   document.getElementById('dayCount').textContent = `${dayTurnos.length} turno${dayTurnos.length!==1?'s':''}`;
 
   const ledger = document.getElementById('ledger');
@@ -660,14 +710,15 @@ function renderDay(){
     </div>`;
     return;
   }
+  ledger.classList.toggle('compact-ledger', compactMode);
   ledger.innerHTML = dayTurnos.map(t=>`
-    <div class="turno-row estado-${t.estado}" data-id="${t.id}">
+    <div class="turno-row estado-${t.estado} ${servicioClass(t.servicio)}" data-id="${t.id}">
       <div class="turno-hora">${t.hora}</div>
       <div class="turno-body">
         <div class="turno-nombres">${escapeHtml(t.dueno)} · <span class="mascota">${escapeHtml(t.mascota)}</span></div>
         <div class="turno-meta">
           <span class="badge badge-${t.estado}">${capitalize(t.estado)}</span>
-          <span>${escapeHtml(t.servicio)}</span>
+          <span class="service-pill">${escapeHtml(t.servicio)}</span>
           ${t.tipoMascota ? `<span>· ${escapeHtml(t.tipoMascota)}</span>` : ''}
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
@@ -731,6 +782,9 @@ function renderSearchResults(query){
 
   document.getElementById('dayCount').textContent = `${matches.length} resultado${matches.length!==1?'s':''}`;
   document.getElementById('daySummary').innerHTML = '';
+  document.getElementById('nextTurnoPanel').classList.remove('show');
+  document.getElementById('nextTurnoPanel').innerHTML = '';
+  renderCompactToggle();
   const ledger = document.getElementById('ledger');
   if(matches.length===0){
     ledger.innerHTML = `<div class="empty-state">
@@ -743,13 +797,13 @@ function renderSearchResults(query){
     const d = new Date(t.fecha+'T00:00:00');
     const fechaLegible = `${DIAS_CORTAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()].slice(0,3)}`;
     return `
-    <div class="turno-row estado-${t.estado}" data-id="${t.id}">
+    <div class="turno-row estado-${t.estado} ${servicioClass(t.servicio)}" data-id="${t.id}">
       <div class="turno-hora">${t.hora}<div class="search-result-date">${fechaLegible}</div></div>
       <div class="turno-body">
         <div class="turno-nombres">${escapeHtml(t.dueno)} · <span class="mascota">${escapeHtml(t.mascota)}</span></div>
         <div class="turno-meta">
           <span class="badge badge-${t.estado}">${capitalize(t.estado)}</span>
-          <span>${escapeHtml(t.servicio)}</span>
+          <span class="service-pill">${escapeHtml(t.servicio)}</span>
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
         <div class="quick-actions">
@@ -773,6 +827,12 @@ function renderSearchResults(query){
   attachQuickActions();
   attachExpandedActions();
 }
+
+document.getElementById('compactToggle').onclick = ()=>{
+  compactMode = !compactMode;
+  localStorage.setItem('galata-compact-mode', compactMode ? '1' : '0');
+  render();
+};
 
 document.getElementById('searchInput').addEventListener('input', (e)=>{
   document.getElementById('clearSearch').classList.toggle('show', e.target.value.trim().length>0);
