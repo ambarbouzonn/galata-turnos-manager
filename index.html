@@ -2,17 +2,39 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Galata Turnos</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="wrap">
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <h1>Galata Turnos</h1>
+    <p>Ingresar al panel de turnos</p>
+    <form id="loginForm">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="loginEmail" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <label>Contrasena</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="loginButton">Ingresar</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<div class="wrap" id="appShell">
   <header>
     <div class="spiral">
       <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
     </div>
     <h1>🐾 Galata Turnos</h1>
     <div class="subtitle" id="subtitle">Cargando turnos...</div>
+    <div class="session-badge" id="sessionBadge"></div>
+    <button class="logout-btn" id="logoutButton">Salir</button>
   </header>
 
   <div class="alert-banner" id="alertBanner">
@@ -29,16 +51,34 @@
     <button class="clear-search" id="clearSearch">✕</button>
   </div>
 
-  <div class="week-nav">
-    <div class="week-arrow" id="prevWeek">‹</div>
-    <div class="week-strip" id="weekStrip"></div>
-    <div class="week-arrow" id="nextWeek">›</div>
+  <div class="status-filters" id="statusFilters">
+    <button class="status-filter active" type="button" data-filter="todos">Todos</button>
+    <button class="status-filter" type="button" data-filter="pendiente">Pendientes</button>
+    <button class="status-filter" type="button" data-filter="confirmado">Confirmados</button>
+    <button class="status-filter" type="button" data-filter="realizado">Realizados</button>
+    <button class="status-filter" type="button" data-filter="cancelado">Cancelados</button>
+  </div>
+
+  <div class="month-card">
+    <div class="month-head">
+      <button class="month-arrow" id="prevMonth" type="button">‹</button>
+      <button class="month-title" id="monthTitle" type="button"></button>
+      <button class="today-btn" id="todayButton" type="button">Hoy</button>
+      <button class="month-arrow" id="nextMonth" type="button">›</button>
+    </div>
+    <div class="month-weekdays">
+      <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
+    </div>
+    <div class="month-grid" id="monthGrid"></div>
   </div>
 
   <div class="day-label">
     <span id="dayLabel"></span>
     <span class="count" id="dayCount">0 turnos</span>
   </div>
+
+  <div class="day-summary" id="daySummary"></div>
+  <div class="upcoming-panel" id="upcomingPanel"></div>
 
   <div class="ledger" id="ledger"></div>
 </div>
@@ -50,6 +90,7 @@
     <h2 id="formTitle">Nuevo turno</h2>
     <div class="form-sub" id="formSub"></div>
     <form id="turnoForm">
+      <div class="form-section-title">Turno</div>
       <div class="row2">
         <div class="field">
           <label>Fecha</label>
@@ -60,14 +101,19 @@
           <input type="time" id="f_hora">
         </div>
       </div>
+      <div class="slot-warning" id="slotWarning"></div>
+      <div class="time-slots" id="timeSlots"></div>
+      <div class="form-section-title">Cliente</div>
       <div class="field">
         <label>Dueño/a de la mascota</label>
-        <input type="text" id="f_dueno" placeholder="Ej: María López">
+        <input type="text" id="f_dueno" list="clientesList" placeholder="Ej: María López">
+        <datalist id="clientesList"></datalist>
       </div>
       <div class="row2">
         <div class="field">
           <label>Mascota</label>
-          <input type="text" id="f_mascota" placeholder="Ej: Rocco">
+          <input type="text" id="f_mascota" list="mascotasList" placeholder="Ej: Rocco">
+          <datalist id="mascotasList"></datalist>
         </div>
         <div class="field">
           <label>Tipo / raza</label>
@@ -90,10 +136,12 @@
           <input type="tel" id="f_telefono" placeholder="11 1234 5678">
         </div>
       </div>
+      <div class="form-section-title">Notas y estado</div>
       <div class="field">
         <label>Notas (ej: nerviosa, alergias)</label>
         <textarea id="f_notas" placeholder="Opcional"></textarea>
       </div>
+      <div class="pet-history" id="petHistory"></div>
       <div class="field">
         <label>Estado</label>
         <div class="estado-choices" id="estadoChoices">
@@ -106,9 +154,6 @@
       <div class="field">
         <label>Cargado por</label>
         <select id="f_cargadoPor">
-          <option value="Dueña">Dueña</option>
-          <option value="Peluquera">Peluquera</option>
-          <option value="Ambar">Ambar</option>
         </select>
       </div>
       <div class="form-actions">

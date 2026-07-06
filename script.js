@@ -1,24 +1,26 @@
+import { getCurrentSession, getUserProfile, onAuthChange, signIn, signOut } from './src/authRepository.js';
+import { getDirectory } from './src/directoryRepository.js';
 import { deleteTurno, getTurnos, saveTurno } from './src/turnosRepository.js';
 
 let turnos = [];
 let selectedDate = new Date();
-let weekStart = getMonday(new Date());
+let visibleMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 let editingId = null;
 let currentEstado = 'pendiente';
+let unsubscribeAuth = null;
+let currentUserProfile = null;
+let directory = { clientes: [], mascotas: [] };
+let activeStatusFilter = 'todos';
+let expandedTurnoId = null;
 
-function getMonday(d){
-  const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(date.setDate(diff));
-  monday.setHours(0,0,0,0);
-  return monday;
-}
 function fmtISO(d){
   const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
   return `${yr}-${mo}-${da}`;
 }
 function todayISO(){ return fmtISO(new Date()); }
+function syncVisibleMonth(){
+  visibleMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+}
 
 const DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 const DIAS_CORTAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -33,13 +35,460 @@ const SERVICIO_COLOR = {
   'Baño':'#2B5D52','Corte':'#E8A33D','Baño y corte':'#D96A5C','Deslanado':'#7A8B6F','Otro':'#8A7E6A'
 };
 
+const ESTADOS = ['pendiente','confirmado','realizado','cancelado'];
+const ESTADO_LABEL = {
+  todos: 'Todos',
+  pendiente: 'Pendientes',
+  confirmado: 'Confirmados',
+  realizado: 'Realizados',
+  cancelado: 'Cancelados'
+};
+const SUGGESTED_TIMES = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+
 async function loadTurnos(){
   try{
     turnos = await getTurnos();
+    directory = await getDirectory(turnos);
+    renderDirectorySuggestions();
   }catch(e){
+    console.error(e);
     turnos = [];
+    showToast('No se pudieron cargar los turnos.');
   }
   render();
+}
+
+function normalizeLookup(value){
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function roleLabel(role){
+  const labels = {
+    admin: 'Admin',
+    peluquera: 'Peluquera',
+    recepcion: 'Recepcion',
+    staff: 'Equipo',
+  };
+  return labels[role] || 'Equipo';
+}
+
+function canDeleteTurnos(){
+  return currentUserProfile && currentUserProfile.role === 'admin';
+}
+
+function findSlotConflict(data){
+  if(data.estado === 'cancelado') return null;
+  return turnos.find(t =>
+    t.id !== data.id &&
+    t.fecha === data.fecha &&
+    t.hora === data.hora &&
+    t.estado !== 'cancelado'
+  );
+}
+
+function fieldValue(id){
+  return document.getElementById(id).value;
+}
+
+function currentFormSlotData(){
+  return {
+    id: editingId || '',
+    fecha: fieldValue('f_fecha'),
+    hora: fieldValue('f_hora'),
+    estado: currentEstado,
+  };
+}
+
+function renderSlotWarning(){
+  const warning = document.getElementById('slotWarning');
+  if(!warning) return;
+  const data = currentFormSlotData();
+  if(!data.fecha || !data.hora){
+    warning.classList.remove('show');
+    warning.textContent = '';
+    return;
+  }
+
+  const conflict = findSlotConflict(data);
+  if(conflict){
+    warning.classList.add('show');
+    warning.textContent = `Horario ocupado por ${conflict.mascota} (${conflict.dueno})`;
+  } else {
+    warning.classList.remove('show');
+    warning.textContent = '';
+  }
+}
+
+function renderTimeSlots(){
+  const container = document.getElementById('timeSlots');
+  if(!container) return;
+  const fecha = fieldValue('f_fecha') || fmtISO(selectedDate);
+  const selected = fieldValue('f_hora');
+  container.innerHTML = SUGGESTED_TIMES.map(time=>{
+    const conflict = findSlotConflict({ id: editingId || '', fecha, hora: time, estado: currentEstado });
+    const classes = 'time-slot'
+      + (selected === time ? ' selected' : '')
+      + (conflict ? ' occupied' : '');
+    return `<button type="button" class="${classes}" data-time="${time}" title="${conflict ? `Ocupado por ${escapeHtml(conflict.mascota)}` : 'Disponible'}">${time}</button>`;
+  }).join('');
+
+  container.querySelectorAll('.time-slot').forEach(button=>{
+    button.onclick = ()=>{
+      document.getElementById('f_hora').value = button.dataset.time;
+      renderTimeSlots();
+      renderSlotWarning();
+    };
+  });
+}
+
+function turnoMatchesQuery(turno, q){
+  return ['dueno','mascota','telefono','servicio','tipoMascota','notas','cargadoPor']
+    .some(key => turno[key] && turno[key].toLowerCase().includes(q));
+}
+
+function matchesStatusFilter(turno){
+  return activeStatusFilter === 'todos' || turno.estado === activeStatusFilter;
+}
+
+function statusCounts(items){
+  return ESTADOS.reduce((acc, estado)=>{
+    acc[estado] = items.filter(t=>t.estado===estado).length;
+    return acc;
+  }, {});
+}
+
+function renderStatusFilters(){
+  document.querySelectorAll('.status-filter').forEach(button=>{
+    button.classList.toggle('active', button.dataset.filter === activeStatusFilter);
+  });
+}
+
+function renderDaySummary(dayTurnos){
+  const summary = document.getElementById('daySummary');
+  const counts = statusCounts(dayTurnos);
+  summary.innerHTML = ESTADOS
+    .filter(estado => counts[estado] > 0)
+    .map(estado => `<span class="summary-pill summary-${estado}">${counts[estado]} ${ESTADO_LABEL[estado].toLowerCase()}</span>`)
+    .join('');
+}
+
+function renderUpcomingPanel(){
+  const panel = document.getElementById('upcomingPanel');
+  if(!panel) return;
+  const start = new Date();
+  start.setHours(0,0,0,0);
+  const end = new Date(start);
+  end.setDate(end.getDate()+7);
+
+  const upcoming = turnos
+    .filter(t=>{
+      const date = new Date(t.fecha+'T00:00:00');
+      return date >= start && date < end && t.estado !== 'cancelado';
+    })
+    .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora))
+    .slice(0, 6);
+
+  if(upcoming.length === 0){
+    panel.innerHTML = '';
+    panel.classList.remove('show');
+    return;
+  }
+
+  panel.classList.add('show');
+  panel.innerHTML = `
+    <div class="upcoming-title">Próximos 7 días</div>
+    <div class="upcoming-list">
+      ${upcoming.map(t=>{
+        const d = new Date(t.fecha+'T00:00:00');
+        const label = `${DIAS_CORTAS[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
+        return `<button type="button" class="upcoming-item" data-date="${t.fecha}" data-id="${t.id}">
+          <span>${label}</span><strong>${escapeHtml(t.hora)}</strong><span>${escapeHtml(t.mascota)}</span>
+        </button>`;
+      }).join('')}
+    </div>`;
+
+  panel.querySelectorAll('.upcoming-item').forEach(button=>{
+    button.onclick = ()=>{
+      selectedDate = new Date(button.dataset.date+'T00:00:00');
+      syncVisibleMonth();
+      expandedTurnoId = button.dataset.id;
+      document.getElementById('searchInput').value = '';
+      document.getElementById('clearSearch').classList.remove('show');
+      render();
+    };
+  });
+}
+
+function goToday(){
+  selectedDate = new Date();
+  syncVisibleMonth();
+  document.getElementById('searchInput').value = '';
+  document.getElementById('clearSearch').classList.remove('show');
+  render();
+}
+
+function expandedTurnoDetails(t){
+  if(expandedTurnoId !== t.id) return '';
+  return `
+    <div class="turno-details">
+      <div class="detail-grid">
+        ${t.telefono ? `<div><span>Teléfono</span><strong>${escapeHtml(t.telefono)}</strong></div>` : ''}
+        ${t.tipoMascota ? `<div><span>Tipo / raza</span><strong>${escapeHtml(t.tipoMascota)}</strong></div>` : ''}
+        <div><span>Cargado por</span><strong>${escapeHtml(t.cargadoPor || '—')}</strong></div>
+        ${t.notas ? `<div class="detail-full"><span>Notas</span><strong>${escapeHtml(t.notas)}</strong></div>` : ''}
+      </div>
+      <button type="button" class="edit-turno-btn" data-edit-id="${t.id}">Editar turno</button>
+    </div>`;
+}
+
+function attachExpandedActions(){
+  document.querySelectorAll('.edit-turno-btn').forEach(button=>{
+    button.onclick = (event)=>{
+      event.stopPropagation();
+      openEdit(button.dataset.editId);
+    };
+  });
+}
+
+function normalizeWhatsAppPhone(phone){
+  let digits = (phone || '').replace(/\D/g, '');
+  if(!digits) return '';
+  if(digits.startsWith('00')) digits = digits.slice(2);
+  if(digits.startsWith('0')) digits = digits.slice(1);
+
+  if(digits.startsWith('549')) return digits;
+  if(digits.startsWith('54')) return `549${digits.slice(2)}`;
+
+  if(digits.startsWith('11') && digits.slice(2,4) === '15'){
+    digits = `11${digits.slice(4)}`;
+  }
+
+  return `549${digits}`;
+}
+
+function whatsappMessage(turno){
+  const d = new Date(turno.fecha+'T00:00:00');
+  const fecha = `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
+  return `Hola! Te recordamos el turno de ${turno.mascota} para ${fecha} a las ${turno.hora}. Galata Turnos`;
+}
+
+function openWhatsApp(id){
+  const turno = turnos.find(t=>t.id===id);
+  if(!turno) return;
+
+  const phone = normalizeWhatsAppPhone(turno.telefono);
+  if(!phone){
+    showToast('Este turno no tiene telefono.');
+    return;
+  }
+
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage(turno))}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function setLoadedByOption(displayName){
+  const select = document.getElementById('f_cargadoPor');
+  if(!displayName) return;
+  let option = Array.from(select.options).find(opt => opt.value === displayName);
+  if(!option){
+    option = document.createElement('option');
+    option.value = displayName;
+    option.textContent = displayName;
+    select.prepend(option);
+  }
+}
+
+function selectedClient(){
+  const value = normalizeLookup(document.getElementById('f_dueno').value);
+  return directory.clientes.find(cliente => cliente.nombreNormalizado === value) || null;
+}
+
+function selectedPet(){
+  const client = selectedClient();
+  const petValue = normalizeLookup(document.getElementById('f_mascota').value);
+  return directory.mascotas.find(mascota =>
+    mascota.nombreNormalizado === petValue &&
+    (!client || mascota.clienteNormalizado === client.nombreNormalizado)
+  ) || null;
+}
+
+function petHistoryItems(){
+  const owner = normalizeLookup(document.getElementById('f_dueno').value);
+  const pet = normalizeLookup(document.getElementById('f_mascota').value);
+  if(!owner || !pet) return [];
+
+  return turnos
+    .filter(turno =>
+      turno.id !== editingId &&
+      normalizeLookup(turno.dueno) === owner &&
+      normalizeLookup(turno.mascota) === pet
+    )
+    .sort((a,b)=> (b.fecha+b.hora).localeCompare(a.fecha+a.hora))
+    .slice(0, 5);
+}
+
+function renderPetHistory(){
+  const container = document.getElementById('petHistory');
+  if(!container) return;
+
+  const items = petHistoryItems();
+  if(items.length === 0){
+    container.classList.remove('show');
+    container.innerHTML = '';
+    return;
+  }
+
+  container.classList.add('show');
+  container.innerHTML = `
+    <div class="pet-history-title">Historial de esta mascota</div>
+    ${items.map(turno => {
+      const d = new Date(turno.fecha+'T00:00:00');
+      const fecha = `${d.getDate()} ${MESES[d.getMonth()].slice(0,3)} ${d.getFullYear()}`;
+      return `
+        <div class="history-item">
+          <div class="history-main">
+            <span>${fecha}</span>
+            <span>${escapeHtml(turno.hora)}</span>
+            <span>${escapeHtml(turno.servicio)}</span>
+          </div>
+          <div class="history-meta">
+            <span class="badge badge-${turno.estado}">${capitalize(turno.estado)}</span>
+            ${turno.tipoMascota ? `<span>${escapeHtml(turno.tipoMascota)}</span>` : ''}
+            ${turno.notas ? `<span class="history-note">${escapeHtml(turno.notas)}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('')}
+  `;
+}
+
+async function updateTurnoEstado(id, estado){
+  const current = turnos.find(t=>t.id===id);
+  if(!current || current.estado === estado) return;
+
+  const updated = { ...current, estado };
+  const conflict = findSlotConflict(updated);
+  if(conflict){
+    showToast(`Ya hay un turno a las ${updated.hora}: ${conflict.mascota}`);
+    return;
+  }
+
+  try{
+    await saveTurno(updated);
+    turnos = turnos.map(t=>t.id===id ? updated : t);
+    render();
+    showToast(`Turno ${capitalize(estado)}`);
+  }catch(err){
+    console.error(err);
+    showToast('No se pudo cambiar el estado.');
+  }
+}
+
+function attachQuickActions(){
+  document.querySelectorAll('.quick-actions button').forEach(button=>{
+    button.onclick = (event)=>{
+      event.stopPropagation();
+      if(button.dataset.action === 'whatsapp'){
+        openWhatsApp(button.dataset.id);
+      } else {
+        updateTurnoEstado(button.dataset.id, button.dataset.action);
+      }
+    };
+  });
+}
+
+function renderDirectorySuggestions(){
+  const clientesList = document.getElementById('clientesList');
+  const mascotasList = document.getElementById('mascotasList');
+  if(!clientesList || !mascotasList) return;
+
+  clientesList.innerHTML = directory.clientes
+    .map(cliente => `<option value="${escapeHtml(cliente.nombre)}"></option>`)
+    .join('');
+
+  renderPetSuggestions();
+}
+
+function renderPetSuggestions(){
+  const mascotasList = document.getElementById('mascotasList');
+  if(!mascotasList) return;
+
+  const client = selectedClient();
+  const mascotas = client
+    ? directory.mascotas.filter(mascota => mascota.clienteNormalizado === client.nombreNormalizado)
+    : directory.mascotas;
+
+  mascotasList.innerHTML = mascotas
+    .map(mascota => `<option value="${escapeHtml(mascota.nombre)}"></option>`)
+    .join('');
+}
+
+function autofillClient(){
+  const client = selectedClient();
+  renderPetSuggestions();
+  if(client && client.telefono && !document.getElementById('f_telefono').value.trim()){
+    document.getElementById('f_telefono').value = client.telefono;
+  }
+  renderPetHistory();
+}
+
+function autofillPet(){
+  const pet = selectedPet();
+  if(pet && pet.tipoMascota && !document.getElementById('f_tipoMascota').value.trim()){
+    document.getElementById('f_tipoMascota').value = pet.tipoMascota;
+  }
+  renderPetHistory();
+}
+
+function renderSessionBadge(user, profile){
+  const badge = document.getElementById('sessionBadge');
+  const displayName = profile && profile.displayName ? profile.displayName : user.email;
+  badge.textContent = `${displayName} · ${roleLabel(profile && profile.role)}`;
+  badge.classList.add('show');
+}
+
+async function showAppForUser(user, profile = null){
+  currentUserProfile = profile || await getUserProfile(user);
+  document.body.classList.add('authenticated');
+  document.getElementById('loginError').textContent = '';
+  if(user) renderSessionBadge(user, currentUserProfile);
+  setLoadedByOption(currentUserProfile && currentUserProfile.displayName);
+  await loadTurnos();
+}
+
+function showLogin(){
+  turnos = [];
+  currentUserProfile = null;
+  document.body.classList.remove('authenticated');
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('sessionBadge').classList.remove('show');
+}
+
+async function initAuth(){
+  try{
+    const { user, profile } = await getCurrentSession();
+    if(user){
+      await showAppForUser(user, profile);
+    } else {
+      showLogin();
+    }
+
+    unsubscribeAuth = await onAuthChange(async (user) => {
+      if(user){
+        await showAppForUser(user);
+      } else {
+        showLogin();
+      }
+    });
+  }catch(err){
+    console.error(err);
+    showLogin();
+    document.getElementById('loginError').textContent = 'No se pudo iniciar la sesion.';
+  }
 }
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -48,24 +497,52 @@ function showToast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
-function renderWeekStrip(){
-  const strip = document.getElementById('weekStrip');
-  strip.innerHTML = '';
-  const selISO = fmtISO(selectedDate);
-  const tISO = todayISO();
-  for(let i=0;i<7;i++){
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate()+i);
-    const iso = fmtISO(d);
-    const count = turnos.filter(t=>t.fecha===iso && t.estado!=='cancelado').length;
-    const div = document.createElement('div');
-    div.className = 'day-tab' + (iso===selISO?' selected':'') + (iso===tISO?' today':'') + (count>0?' has-turnos':'');
-    div.innerHTML = `<div class="dname">${DIAS_CORTAS[d.getDay()]}</div><div class="dnum">${d.getDate()}</div><div class="dot"></div>`;
-    div.onclick = ()=>{ selectedDate = d; render(); };
-    strip.appendChild(div);
+function renderMonthView(){
+  const grid = document.getElementById('monthGrid');
+  const title = document.getElementById('monthTitle');
+  grid.innerHTML = '';
+  title.textContent = `${MESES[visibleMonth.getMonth()]} ${visibleMonth.getFullYear()}`;
+  document.getElementById('subtitle').textContent = 'Calendario de turnos';
+
+  const first = new Date(visibleMonth);
+  const firstWeekday = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth()+1, 0).getDate();
+  const selectedISO = fmtISO(selectedDate);
+  const today = todayISO();
+
+  for(let i=0;i<firstWeekday;i++){
+    const empty = document.createElement('button');
+    empty.type = 'button';
+    empty.className = 'month-day is-empty';
+    grid.appendChild(empty);
   }
-  const monthLabel = `${MESES[weekStart.getMonth()]} ${weekStart.getFullYear()}`;
-  document.getElementById('subtitle').textContent = `Semana del ${weekStart.getDate()} de ${monthLabel}`;
+
+  for(let day=1;day<=daysInMonth;day++){
+    const d = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
+    const iso = fmtISO(d);
+    const dayItems = turnos.filter(t=>t.fecha===iso);
+    const counts = statusCounts(dayItems);
+    const count = dayItems.filter(t=>t.estado!=='cancelado').length;
+    const dots = ESTADOS
+      .filter(estado => counts[estado] > 0)
+      .map(estado => `<span class="month-dot dot-${estado}"></span>`)
+      .join('');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'month-day'
+      + (iso===selectedISO ? ' is-selected' : '')
+      + (iso===today ? ' is-today' : '')
+      + (count>0 ? ' has-turnos' : '');
+    btn.innerHTML = `<span class="month-num">${day}</span><span class="month-dots">${dots}</span>`;
+    btn.onclick = ()=>{
+      selectedDate = d;
+      syncVisibleMonth();
+      document.getElementById('searchInput').value = '';
+      document.getElementById('clearSearch').classList.remove('show');
+      render();
+    };
+    grid.appendChild(btn);
+  }
 }
 
 function renderDay(){
@@ -73,7 +550,9 @@ function renderDay(){
   const label = document.getElementById('dayLabel');
   label.textContent = `${DIAS[selectedDate.getDay()]} ${selectedDate.getDate()} de ${MESES[selectedDate.getMonth()]}`;
 
-  const dayTurnos = turnos.filter(t=>t.fecha===iso).sort((a,b)=> a.hora.localeCompare(b.hora));
+  const allDayTurnos = turnos.filter(t=>t.fecha===iso).sort((a,b)=> a.hora.localeCompare(b.hora));
+  const dayTurnos = allDayTurnos.filter(matchesStatusFilter);
+  renderDaySummary(allDayTurnos);
   document.getElementById('dayCount').textContent = `${dayTurnos.length} turno${dayTurnos.length!==1?'s':''}`;
 
   const ledger = document.getElementById('ledger');
@@ -99,19 +578,33 @@ function renderDay(){
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
         <div class="who-badge">Cargó: ${t.cargadoPor||'—'}</div>
+        <div class="quick-actions">
+          <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
+          <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
+          <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
+          <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
+        </div>
+        ${expandedTurnoDetails(t)}
       </div>
       <div class="stamp">${PAW_SVG(color)}</div>
     </div>`;
   }).join('');
 
   ledger.querySelectorAll('.turno-row').forEach(row=>{
-    row.onclick = ()=> openEdit(row.dataset.id);
+    row.onclick = ()=>{
+      expandedTurnoId = expandedTurnoId === row.dataset.id ? null : row.dataset.id;
+      render();
+    };
   });
+  attachQuickActions();
+  attachExpandedActions();
 }
 
 function render(){
   renderAlertBanner();
-  renderWeekStrip();
+  renderStatusFilters();
+  renderMonthView();
+  renderUpcomingPanel();
   const query = document.getElementById('searchInput').value.trim();
   if(query.length > 0){
     renderSearchResults(query);
@@ -134,22 +627,18 @@ function renderAlertBanner(){
   }
 }
 document.getElementById('alertBanner').onclick = ()=>{
-  selectedDate = new Date();
-  weekStart = getMonday(new Date());
-  document.getElementById('searchInput').value = '';
-  document.getElementById('clearSearch').classList.remove('show');
-  render();
+  goToday();
 };
 
 function renderSearchResults(query){
   document.getElementById('dayLabel').textContent = `Resultados para "${query}"`;
   const q = query.toLowerCase();
-  const matches = turnos.filter(t =>
-    (t.dueno && t.dueno.toLowerCase().includes(q)) ||
-    (t.mascota && t.mascota.toLowerCase().includes(q))
-  ).sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+  const matches = turnos
+    .filter(t => matchesStatusFilter(t) && turnoMatchesQuery(t, q))
+    .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
 
   document.getElementById('dayCount').textContent = `${matches.length} resultado${matches.length!==1?'s':''}`;
+  document.getElementById('daySummary').innerHTML = '';
   const ledger = document.getElementById('ledger');
   if(matches.length===0){
     ledger.innerHTML = `<div class="empty-state">
@@ -174,13 +663,25 @@ function renderSearchResults(query){
         </div>
         ${t.notas ? `<div class="notas-preview">⚠ ${escapeHtml(t.notas)}</div>` : ''}
         <div class="who-badge">Cargó: ${t.cargadoPor||'—'}</div>
+        <div class="quick-actions">
+          <button type="button" data-action="confirmado" data-id="${t.id}" ${t.estado==='confirmado'?'disabled':''}>Confirmar</button>
+          <button type="button" data-action="realizado" data-id="${t.id}" ${t.estado==='realizado'?'disabled':''}>Realizado</button>
+          <button type="button" data-action="cancelado" data-id="${t.id}" ${t.estado==='cancelado'?'disabled':''}>Cancelar</button>
+          <button type="button" class="whatsapp-action" data-action="whatsapp" data-id="${t.id}" ${t.telefono?'':'disabled'}>WhatsApp</button>
+        </div>
+        ${expandedTurnoDetails(t)}
       </div>
       <div class="stamp">${PAW_SVG(color)}</div>
     </div>`;
   }).join('');
   ledger.querySelectorAll('.turno-row').forEach(row=>{
-    row.onclick = ()=> openEdit(row.dataset.id);
+    row.onclick = ()=>{
+      expandedTurnoId = expandedTurnoId === row.dataset.id ? null : row.dataset.id;
+      render();
+    };
   });
+  attachQuickActions();
+  attachExpandedActions();
 }
 
 document.getElementById('searchInput').addEventListener('input', (e)=>{
@@ -193,22 +694,75 @@ document.getElementById('clearSearch').onclick = ()=>{
   render();
 };
 
+document.getElementById('f_dueno').addEventListener('input', autofillClient);
+document.getElementById('f_mascota').addEventListener('input', autofillPet);
+document.getElementById('f_fecha').addEventListener('input', ()=>{
+  renderTimeSlots();
+  renderSlotWarning();
+});
+document.getElementById('f_hora').addEventListener('input', ()=>{
+  renderTimeSlots();
+  renderSlotWarning();
+});
+document.querySelectorAll('.status-filter').forEach(button=>{
+  button.onclick = ()=>{
+    activeStatusFilter = button.dataset.filter;
+    render();
+  };
+});
+
+document.getElementById('loginForm').onsubmit = async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const button = document.getElementById('loginButton');
+  const error = document.getElementById('loginError');
+
+  button.disabled = true;
+  button.textContent = 'Ingresando...';
+  error.textContent = '';
+  try{
+    const { user, profile } = await signIn(email, password);
+    await showAppForUser(user, profile);
+  }catch(err){
+    console.error(err);
+    error.textContent = 'Email o contrasena incorrectos.';
+  }finally{
+    button.disabled = false;
+    button.textContent = 'Ingresar';
+  }
+};
+
+document.getElementById('logoutButton').onclick = async ()=>{
+  try{
+    await signOut();
+    showLogin();
+  }catch(err){
+    console.error(err);
+    showToast('No se pudo cerrar sesion.');
+  }
+};
+
 function escapeHtml(str){
   if(!str) return '';
   return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 
-document.getElementById('prevWeek').onclick = ()=>{
-  weekStart.setDate(weekStart.getDate()-7);
-  weekStart = new Date(weekStart);
+document.getElementById('prevMonth').onclick = ()=>{
+  visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth()-1, 1);
+  selectedDate = new Date(visibleMonth);
   render();
 };
-document.getElementById('nextWeek').onclick = ()=>{
-  weekStart.setDate(weekStart.getDate()+7);
-  weekStart = new Date(weekStart);
+document.getElementById('nextMonth').onclick = ()=>{
+  visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth()+1, 1);
+  selectedDate = new Date(visibleMonth);
   render();
 };
+document.getElementById('monthTitle').onclick = ()=>{
+  goToday();
+};
+document.getElementById('todayButton').onclick = goToday;
 
 function setEstadoChip(estado){
   currentEstado = estado;
@@ -218,6 +772,8 @@ function setEstadoChip(estado){
       chip.classList.add('active-'+estado);
     }
   });
+  renderTimeSlots();
+  renderSlotWarning();
 }
 document.querySelectorAll('.estado-chip').forEach(chip=>{
   chip.onclick = ()=> setEstadoChip(chip.dataset.estado);
@@ -228,10 +784,18 @@ function openNew(){
   document.getElementById('formTitle').textContent = 'Nuevo turno';
   document.getElementById('formSub').textContent = 'Completá los datos y guardá el turno.';
   document.getElementById('turnoForm').reset();
+  renderDirectorySuggestions();
+  renderPetHistory();
   document.getElementById('f_fecha').value = fmtISO(selectedDate);
   document.getElementById('f_hora').value = '10:00';
+  if(currentUserProfile && currentUserProfile.displayName){
+    setLoadedByOption(currentUserProfile.displayName);
+    document.getElementById('f_cargadoPor').value = currentUserProfile.displayName;
+  }
   document.getElementById('btnDelete').style.display = 'none';
   setEstadoChip('pendiente');
+  renderTimeSlots();
+  renderSlotWarning();
   document.getElementById('overlay').classList.add('open');
 }
 
@@ -249,9 +813,14 @@ function openEdit(id){
   document.getElementById('f_servicio').value = t.servicio;
   document.getElementById('f_telefono').value = t.telefono||'';
   document.getElementById('f_notas').value = t.notas||'';
+  setLoadedByOption(t.cargadoPor || 'Dueña');
   document.getElementById('f_cargadoPor').value = t.cargadoPor||'Dueña';
-  document.getElementById('btnDelete').style.display = 'inline-block';
+  document.getElementById('btnDelete').style.display = canDeleteTurnos() ? 'inline-block' : 'none';
   setEstadoChip(t.estado||'pendiente');
+  renderTimeSlots();
+  renderSlotWarning();
+  renderPetSuggestions();
+  renderPetHistory();
   document.getElementById('overlay').classList.add('open');
 }
 
@@ -261,6 +830,10 @@ document.getElementById('overlay').onclick = (e)=>{ if(e.target.id==='overlay') 
 
 document.getElementById('btnDelete').onclick = async ()=>{
   if(!editingId) return;
+  if(!canDeleteTurnos()){
+    showToast('Solo admin puede eliminar turnos.');
+    return;
+  }
   if(!confirm('¿Eliminar este turno?')) return;
   const deletedId = editingId;
   turnos = turnos.filter(t=>t.id!==editingId);
@@ -322,6 +895,14 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
       estado: currentEstado,
       cargadoPor: document.getElementById('f_cargadoPor').value
     };
+
+    const conflict = findSlotConflict(data);
+    if(conflict){
+      showToast(`Ya hay un turno a las ${data.hora}: ${conflict.mascota}`);
+      fHora.focus();
+      return;
+    }
+
     if(editingId){
       const idx = turnos.findIndex(t=>t.id===editingId);
       turnos[idx] = data;
@@ -329,15 +910,22 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
       turnos.push(data);
     }
     await saveTurno(data);
+    directory = await getDirectory(turnos);
+    renderDirectorySuggestions();
     document.getElementById('overlay').classList.remove('open');
     selectedDate = new Date(data.fecha+'T00:00:00');
-    weekStart = getMonday(selectedDate);
+    syncVisibleMonth();
     render();
     showToast(editingId ? 'Turno actualizado' : 'Turno guardado');
   }catch(err){
     console.error(err);
-    showToast('Algo falló al guardar. Probá de nuevo.');
+    const message = err && err.message ? err.message : '';
+    if(message.includes('turnos_unique_active_slot') || message.includes('duplicate key')){
+      showToast('Ese horario ya esta ocupado.');
+    } else {
+      showToast('Algo falló al guardar. Probá de nuevo.');
+    }
   }
 };
 
-loadTurnos();
+initAuth();

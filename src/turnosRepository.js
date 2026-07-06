@@ -1,10 +1,9 @@
-import { APP_CONFIG } from './appConfig.js';
+import { getSupabaseClient } from './supabaseClient.js';
+import { upsertDirectoryFromTurno } from './directoryRepository.js';
 
 const STORAGE_KEY = 'galata-turnos';
 const LEGACY_STORAGE_KEY = 'turnos-vete';
 const SUPABASE_TABLE = 'turnos';
-
-let supabaseClient = null;
 
 function parseTurnos(rawValue) {
   if (!rawValue) return [];
@@ -37,10 +36,6 @@ async function readLegacyWindowStorage() {
   }
 }
 
-function isSupabaseConfigured() {
-  return Boolean(APP_CONFIG.supabaseUrl && APP_CONFIG.supabaseKey);
-}
-
 function toAppTurno(row) {
   return {
     id: row.id,
@@ -71,15 +66,6 @@ function toDbTurno(turno) {
     estado: turno.estado || 'pendiente',
     cargado_por: turno.cargadoPor || null,
   };
-}
-
-async function getSupabaseClient() {
-  if (!isSupabaseConfigured()) return null;
-  if (supabaseClient) return supabaseClient;
-
-  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-  supabaseClient = createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseKey);
-  return supabaseClient;
 }
 
 async function getRemoteTurnos() {
@@ -134,6 +120,8 @@ export async function saveTurnos(turnos) {
 export async function saveTurno(turno) {
   const supabase = await getSupabaseClient();
   if (supabase) {
+    await upsertDirectoryFromTurno(turno);
+
     const { error } = await supabase
       .from(SUPABASE_TABLE)
       .upsert(toDbTurno(turno), { onConflict: 'id' });

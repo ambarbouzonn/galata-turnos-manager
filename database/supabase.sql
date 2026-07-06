@@ -32,7 +32,14 @@ before update on public.turnos
 for each row
 execute function public.set_updated_at();
 
+create unique index if not exists turnos_unique_active_slot
+on public.turnos (fecha, hora)
+where estado <> 'cancelado';
+
 alter table public.turnos enable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.turnos to anon;
 
 drop policy if exists "turnos_select_public" on public.turnos;
 drop policy if exists "turnos_insert_public" on public.turnos;
