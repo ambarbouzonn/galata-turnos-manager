@@ -1,17 +1,23 @@
 import { getCurrentSession, getUserProfile, onAuthChange, signIn, signOut } from './src/authRepository.js';
+import { deleteCirugia, getCirugias, saveCirugia } from './src/cirugiasRepository.js';
 import { getDirectory } from './src/directoryRepository.js';
 import { deleteTurno, getTurnos, saveTurno } from './src/turnosRepository.js';
 
 let turnos = [];
+let cirugias = [];
 let selectedDate = new Date();
 let visibleMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 let editingId = null;
+let editingCirugiaId = null;
 let currentEstado = 'pendiente';
+let currentCirugiaEstado = 'programada';
 let unsubscribeAuth = null;
 let currentUserProfile = null;
 let directory = { clientes: [], mascotas: [] };
 let expandedTurnoId = null;
+let expandedCirugiaId = null;
 let compactMode = localStorage.getItem('galata-compact-mode') === '1';
+let activePage = localStorage.getItem('galata-active-page') === 'cirugias' ? 'cirugias' : 'turnos';
 
 function fmtISO(d){
   const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
@@ -51,6 +57,13 @@ const ESTADO_LABEL = {
   realizado: 'Realizados',
   cancelado: 'Cancelados'
 };
+const CIRUGIA_ESTADOS = ['programada','confirmada','realizada','cancelada'];
+const CIRUGIA_ESTADO_LABEL = {
+  programada: 'Programadas',
+  confirmada: 'Confirmadas',
+  realizada: 'Realizadas',
+  cancelada: 'Canceladas'
+};
 const SUGGESTED_TIMES = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
 
 async function loadTurnos(){
@@ -64,6 +77,21 @@ async function loadTurnos(){
     showToast('No se pudieron cargar los turnos.');
   }
   render();
+}
+
+async function loadCirugias(){
+  try{
+    cirugias = await getCirugias();
+  }catch(e){
+    console.error(e);
+    cirugias = [];
+    showToast('No se pudieron cargar las cirugias.');
+  }
+}
+
+async function loadData(){
+  await loadCirugias();
+  await loadTurnos();
 }
 
 function normalizeLookup(value){
@@ -97,6 +125,72 @@ function findSlotConflict(data){
     t.hora === data.hora &&
     t.estado !== 'cancelado'
   );
+}
+
+function timeToMinutes(value){
+  if(!value) return null;
+  const [hours, minutes] = value.split(':').map(Number);
+  if(Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function surgeryTimeHtml(cirugia){
+  return `<span>${escapeHtml(cirugia.horaInicio)}</span><span>${escapeHtml(cirugia.horaFin)}</span>`;
+}
+
+function findSurgeryOverlaps(data){
+  if(data.estado === 'cancelada') return [];
+  const start = timeToMinutes(data.horaInicio);
+  const end = timeToMinutes(data.horaFin);
+  if(!data.fecha || start === null || end === null || end <= start) return [];
+
+  return turnos
+    .filter(t=>{
+      if(t.fecha !== data.fecha || t.estado === 'cancelado') return false;
+      const minutes = timeToMinutes(t.hora);
+      return minutes !== null && minutes >= start && minutes < end;
+    })
+    .sort((a,b)=> a.hora.localeCompare(b.hora));
+}
+
+function currentSurgeryFormData(){
+  return {
+    id: editingCirugiaId || '',
+    fecha: fieldValue('c_fecha'),
+    horaInicio: fieldValue('c_horaInicio'),
+    horaFin: fieldValue('c_horaFin'),
+    estado: currentCirugiaEstado,
+  };
+}
+
+function renderSurgeryOverlaps(){
+  const container = document.getElementById('surgeryOverlaps');
+  if(!container) return;
+  const data = currentSurgeryFormData();
+  const overlaps = findSurgeryOverlaps(data);
+  const start = timeToMinutes(data.horaInicio);
+  const end = timeToMinutes(data.horaFin);
+
+  if(start !== null && end !== null && end <= start){
+    container.classList.add('show');
+    container.innerHTML = '<div class="overlap-title">Revisar horario</div><strong>La hora de fin tiene que ser posterior al inicio.</strong>';
+    return;
+  }
+
+  if(overlaps.length === 0){
+    container.classList.remove('show');
+    container.innerHTML = '';
+    return;
+  }
+
+  container.classList.add('show');
+  container.innerHTML = `
+    <div class="overlap-title">Se cruza con ${overlaps.length} turno${overlaps.length!==1?'s':''}</div>
+    ${overlaps.map(t=>`
+      <div class="overlap-item">
+        <strong>${escapeHtml(t.hora)} · ${escapeHtml(t.mascota)} (${escapeHtml(t.dueno)})</strong>
+        <span>${escapeHtml(t.servicio)}${t.cargadoPor ? ` · ${escapeHtml(t.cargadoPor)}` : ''}</span>
+      </div>`).join('')}`;
 }
 
 function fieldValue(id){
@@ -154,9 +248,55 @@ function renderTimeSlots(){
   });
 }
 
+function renderSurgeryTimeSlots(){
+  const startContainer = document.getElementById('surgeryStartSlots');
+  const endContainer = document.getElementById('surgeryEndSlots');
+  if(!startContainer || !endContainer) return;
+
+  const start = fieldValue('c_horaInicio');
+  const end = fieldValue('c_horaFin');
+  const endTimes = [...SUGGESTED_TIMES, '18:30', '19:00'];
+
+  startContainer.innerHTML = SUGGESTED_TIMES.map(time=>{
+    const classes = 'time-slot' + (start === time ? ' selected' : '');
+    return `<button type="button" class="${classes}" data-time="${time}" data-target="c_horaInicio">${time}</button>`;
+  }).join('');
+
+  endContainer.innerHTML = endTimes.map(time=>{
+    const classes = 'time-slot' + (end === time ? ' selected' : '');
+    return `<button type="button" class="${classes}" data-time="${time}" data-target="c_horaFin">${time}</button>`;
+  }).join('');
+
+  document.querySelectorAll('.surgery-time-slots .time-slot').forEach(button=>{
+    button.onclick = ()=>{
+      document.getElementById(button.dataset.target).value = button.dataset.time;
+      if(button.dataset.target === 'c_horaInicio'){
+        const selectedStart = timeToMinutes(button.dataset.time);
+        const selectedEnd = timeToMinutes(fieldValue('c_horaFin'));
+        if(selectedStart !== null && selectedEnd !== null && selectedEnd <= selectedStart){
+          const next = endTimes.find(time => timeToMinutes(time) > selectedStart);
+          if(next) document.getElementById('c_horaFin').value = next;
+        }
+      }
+      renderSurgeryTimeSlots();
+      renderSurgeryOverlaps();
+    };
+  });
+}
+
+function syncSurgeryTimeControls(){
+  renderSurgeryTimeSlots();
+  renderSurgeryOverlaps();
+}
+
 function turnoMatchesQuery(turno, q){
   return ['dueno','mascota','telefono','instagram','servicio','tipoMascota','notas','cargadoPor']
     .some(key => turno[key] && turno[key].toLowerCase().includes(q));
+}
+
+function cirugiaMatchesQuery(cirugia, q){
+  return ['dueno','mascota','telefono','procedimiento','tipoMascota','notas','cargadoPor']
+    .some(key => cirugia[key] && cirugia[key].toLowerCase().includes(q));
 }
 
 function servicioClass(servicio){
@@ -176,6 +316,13 @@ function statusCounts(items){
   }, {});
 }
 
+function surgeryStatusCounts(items){
+  return CIRUGIA_ESTADOS.reduce((acc, estado)=>{
+    acc[estado] = items.filter(t=>t.estado===estado).length;
+    return acc;
+  }, {});
+}
+
 function renderDaySummary(dayTurnos){
   const summary = document.getElementById('daySummary');
   const counts = statusCounts(dayTurnos);
@@ -189,6 +336,18 @@ function renderCompactToggle(){
   const button = document.getElementById('compactToggle');
   if(!button) return;
   button.classList.toggle('active', compactMode);
+}
+
+function renderPageTabs(){
+  document.querySelectorAll('.app-tab').forEach(tab=>{
+    tab.classList.toggle('active', tab.dataset.page === activePage);
+  });
+  const searchInput = document.getElementById('searchInput');
+  if(searchInput){
+    searchInput.placeholder = activePage === 'cirugias'
+      ? 'Buscar por duenio/a, mascota o procedimiento...'
+      : 'Buscar por duenio/a o mascota...';
+  }
 }
 
 function renderNextTurnoPanel(dayTurnos){
@@ -227,6 +386,11 @@ function selectedDayTitle(){
 function renderUpcomingPanel(){
   const panel = document.getElementById('upcomingPanel');
   if(!panel) return;
+  if(activePage === 'cirugias'){
+    panel.innerHTML = '';
+    panel.classList.remove('show');
+    return;
+  }
   const start = new Date();
   start.setHours(0,0,0,0);
   const end = new Date(start);
@@ -310,10 +474,19 @@ function expandedTurnoDetails(t){
 }
 
 function attachExpandedActions(){
-  document.querySelectorAll('.edit-turno-btn').forEach(button=>{
+  document.querySelectorAll('.edit-turno-btn[data-edit-id]').forEach(button=>{
     button.onclick = (event)=>{
       event.stopPropagation();
       openEdit(button.dataset.editId);
+    };
+  });
+}
+
+function attachCirugiaExpandedActions(){
+  document.querySelectorAll('.edit-cirugia-btn').forEach(button=>{
+    button.onclick = (event)=>{
+      event.stopPropagation();
+      openEditCirugia(button.dataset.editCirugiaId);
     };
   });
 }
@@ -429,8 +602,8 @@ function openInstagram(id){
   );
 }
 
-function setLoadedByOption(displayName){
-  const select = document.getElementById('f_cargadoPor');
+function setLoadedByOption(displayName, selectId = 'f_cargadoPor'){
+  const select = document.getElementById(selectId);
   if(!displayName) return;
   let option = Array.from(select.options).find(opt => opt.value === displayName);
   if(!option){
@@ -589,6 +762,34 @@ function autofillPet(){
   renderPetHistory();
 }
 
+function selectedClientFromFields(ownerId){
+  const value = normalizeLookup(document.getElementById(ownerId).value);
+  return directory.clientes.find(cliente => cliente.nombreNormalizado === value) || null;
+}
+
+function selectedPetFromFields(ownerId, petId){
+  const client = selectedClientFromFields(ownerId);
+  const petValue = normalizeLookup(document.getElementById(petId).value);
+  return directory.mascotas.find(mascota =>
+    mascota.nombreNormalizado === petValue &&
+    (!client || mascota.clienteNormalizado === client.nombreNormalizado)
+  ) || null;
+}
+
+function autofillSurgeryClient(){
+  const client = selectedClientFromFields('c_dueno');
+  if(client && client.telefono && !document.getElementById('c_telefono').value.trim()){
+    document.getElementById('c_telefono').value = client.telefono;
+  }
+}
+
+function autofillSurgeryPet(){
+  const pet = selectedPetFromFields('c_dueno', 'c_mascota');
+  if(pet && pet.tipoMascota && !document.getElementById('c_tipoMascota').value.trim()){
+    document.getElementById('c_tipoMascota').value = pet.tipoMascota;
+  }
+}
+
 function renderSessionBadge(user, profile){
   const badge = document.getElementById('sessionBadge');
   const displayName = profile && profile.displayName ? profile.displayName : user.email;
@@ -606,11 +807,13 @@ async function showAppForUser(user, profile = null){
   document.getElementById('loginError').textContent = '';
   if(user) renderSessionBadge(user, currentUserProfile);
   setLoadedByOption(currentUserProfile && currentUserProfile.displayName);
-  await loadTurnos();
+  setLoadedByOption(currentUserProfile && currentUserProfile.displayName, 'c_cargadoPor');
+  await loadData();
 }
 
 function showLogin(){
   turnos = [];
+  cirugias = [];
   currentUserProfile = null;
   document.body.classList.remove('authenticated');
   document.getElementById('loginPassword').value = '';
@@ -651,7 +854,7 @@ function renderMonthView(){
   const title = document.getElementById('monthTitle');
   grid.innerHTML = '';
   title.textContent = `${MESES[visibleMonth.getMonth()]} ${visibleMonth.getFullYear()}`;
-  document.getElementById('subtitle').textContent = 'Calendario de turnos';
+  document.getElementById('subtitle').textContent = activePage === 'cirugias' ? 'Calendario de cirugias' : 'Calendario de turnos';
 
   const first = new Date(visibleMonth);
   const firstWeekday = (first.getDay() + 6) % 7;
@@ -669,10 +872,13 @@ function renderMonthView(){
   for(let day=1;day<=daysInMonth;day++){
     const d = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
     const iso = fmtISO(d);
-    const dayItems = turnos.filter(t=>t.fecha===iso);
-    const counts = statusCounts(dayItems);
-    const count = dayItems.filter(t=>t.estado!=='cancelado').length;
-    const dots = ESTADOS
+    const dayItems = activePage === 'cirugias'
+      ? cirugias.filter(t=>t.fecha===iso)
+      : turnos.filter(t=>t.fecha===iso);
+    const states = activePage === 'cirugias' ? CIRUGIA_ESTADOS : ESTADOS;
+    const counts = activePage === 'cirugias' ? surgeryStatusCounts(dayItems) : statusCounts(dayItems);
+    const count = dayItems.filter(t=>t.estado !== (activePage === 'cirugias' ? 'cancelada' : 'cancelado')).length;
+    const dots = states
       .filter(estado => counts[estado] > 0)
       .map(estado => `<span class="month-dot dot-${estado}"></span>`)
       .join('');
@@ -748,13 +954,102 @@ function renderDay(){
   attachExpandedActions();
 }
 
+function renderSurgeryDaySummary(dayCirugias){
+  const summary = document.getElementById('daySummary');
+  const counts = surgeryStatusCounts(dayCirugias);
+  summary.innerHTML = CIRUGIA_ESTADOS
+    .filter(estado => counts[estado] > 0)
+    .map(estado => `<span class="summary-pill summary-${estado}">${counts[estado]} ${CIRUGIA_ESTADO_LABEL[estado].toLowerCase()}</span>`)
+    .join('');
+}
+
+function expandedCirugiaDetails(cirugia){
+  if(expandedCirugiaId !== cirugia.id) return '';
+  const overlaps = findSurgeryOverlaps(cirugia);
+  return `
+    <div class="turno-details">
+      <div class="detail-grid">
+        ${cirugia.telefono ? `<div><span>Telefono</span><strong>${escapeHtml(cirugia.telefono)}</strong></div>` : ''}
+        ${cirugia.tipoMascota ? `<div><span>Tipo / raza</span><strong>${escapeHtml(cirugia.tipoMascota)}</strong></div>` : ''}
+        <div><span>Cargado por</span><strong>${escapeHtml(cirugia.cargadoPor || '-')}</strong></div>
+        <div><span>Cruces</span><strong>${overlaps.length} turno${overlaps.length!==1?'s':''}</strong></div>
+        ${cirugia.notas ? `<div class="detail-full"><span>Notas</span><strong>${escapeHtml(cirugia.notas)}</strong></div>` : ''}
+      </div>
+      ${overlaps.length ? `
+        <div class="surgery-overlap-list">
+          ${overlaps.map(t=>`
+            <div class="surgery-overlap-pill">
+              <strong>${escapeHtml(t.hora)}</strong> ${escapeHtml(t.mascota)} <span>${escapeHtml(t.servicio)} · ${escapeHtml(t.dueno)}</span>
+            </div>`).join('')}
+        </div>` : ''}
+      <button type="button" class="edit-turno-btn edit-cirugia-btn" data-edit-cirugia-id="${cirugia.id}">Editar cirugia</button>
+    </div>`;
+}
+
+function renderCirugiasDay(){
+  const iso = fmtISO(selectedDate);
+  const label = document.getElementById('dayLabel');
+  label.textContent = selectedDayTitle();
+
+  const dayCirugias = cirugias
+    .filter(t=>t.fecha===iso)
+    .sort((a,b)=> a.horaInicio.localeCompare(b.horaInicio));
+  renderSurgeryDaySummary(dayCirugias);
+  document.getElementById('nextTurnoPanel').classList.remove('show');
+  document.getElementById('nextTurnoPanel').innerHTML = '';
+  renderCompactToggle();
+  document.getElementById('dayCount').textContent = `${dayCirugias.length} cirugia${dayCirugias.length!==1?'s':''}`;
+
+  const ledger = document.getElementById('ledger');
+  ledger.classList.toggle('compact-ledger', compactMode);
+  if(dayCirugias.length===0){
+    ledger.innerHTML = `<div class="empty-state">
+      <div class="paw">${PAW_SVG('#6B6355')}</div>
+      <p>No hay cirugias cargadas para este dia.<br>Toca el boton + para programar una.</p>
+    </div>`;
+    return;
+  }
+
+  ledger.innerHTML = dayCirugias.map(cirugia=>{
+    const overlaps = findSurgeryOverlaps(cirugia);
+    return `
+      <div class="turno-row surgery-row estado-${cirugia.estado}" data-id="${cirugia.id}">
+        <div class="turno-hora surgery-time">${surgeryTimeHtml(cirugia)}</div>
+        <div class="turno-body">
+          <div class="turno-nombres">${escapeHtml(cirugia.dueno)} · <span class="mascota">${escapeHtml(cirugia.mascota)}</span></div>
+          <div class="turno-meta">
+            <span class="badge badge-${cirugia.estado}">${capitalize(cirugia.estado)}</span>
+            <span class="service-pill">${escapeHtml(cirugia.procedimiento)}</span>
+            ${cirugia.tipoMascota ? `<span>· ${escapeHtml(cirugia.tipoMascota)}</span>` : ''}
+          </div>
+          ${overlaps.length ? `
+            <div class="notas-preview">${overlaps.length} cruce${overlaps.length!==1?'s':''}: ${overlaps.map(t=>`${escapeHtml(t.hora)} ${escapeHtml(t.mascota)}`).join(', ')}</div>
+          ` : ''}
+          ${cirugia.notas ? `<div class="notas-preview">${escapeHtml(cirugia.notas)}</div>` : ''}
+          ${expandedCirugiaDetails(cirugia)}
+        </div>
+      </div>`;
+  }).join('');
+
+  ledger.querySelectorAll('.surgery-row').forEach(row=>{
+    row.onclick = ()=>{
+      expandedCirugiaId = expandedCirugiaId === row.dataset.id ? null : row.dataset.id;
+      render();
+    };
+  });
+  attachCirugiaExpandedActions();
+}
+
 function render(){
+  renderPageTabs();
   renderAlertBanner();
   renderMonthView();
   renderUpcomingPanel();
   const query = document.getElementById('searchInput').value.trim();
   if(query.length > 0){
     renderSearchResults(query);
+  } else if(activePage === 'cirugias'){
+    renderCirugiasDay();
   } else {
     renderDay();
   }
@@ -780,9 +1075,13 @@ document.getElementById('alertBanner').onclick = ()=>{
 function renderSearchResults(query){
   document.getElementById('dayLabel').textContent = `Resultados para "${query}"`;
   const q = query.toLowerCase();
-  const matches = turnos
-    .filter(t => turnoMatchesQuery(t, q))
-    .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+  const matches = activePage === 'cirugias'
+    ? cirugias
+      .filter(t => cirugiaMatchesQuery(t, q))
+      .sort((a,b)=> (a.fecha+a.horaInicio).localeCompare(b.fecha+b.horaInicio))
+    : turnos
+      .filter(t => turnoMatchesQuery(t, q))
+      .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
 
   document.getElementById('dayCount').textContent = `${matches.length} resultado${matches.length!==1?'s':''}`;
   document.getElementById('daySummary').innerHTML = '';
@@ -797,6 +1096,35 @@ function renderSearchResults(query){
     </div>`;
     return;
   }
+  if(activePage === 'cirugias'){
+    ledger.innerHTML = matches.map(cirugia=>{
+      const d = new Date(cirugia.fecha+'T00:00:00');
+      const fechaLegible = `${DIAS_CORTAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()].slice(0,3)}`;
+      const overlaps = findSurgeryOverlaps(cirugia);
+      return `
+      <div class="turno-row surgery-row estado-${cirugia.estado}" data-id="${cirugia.id}">
+        <div class="turno-hora surgery-time">${surgeryTimeHtml(cirugia)}<div class="search-result-date">${fechaLegible}</div></div>
+        <div class="turno-body">
+          <div class="turno-nombres">${escapeHtml(cirugia.dueno)} · <span class="mascota">${escapeHtml(cirugia.mascota)}</span></div>
+          <div class="turno-meta">
+            <span class="badge badge-${cirugia.estado}">${capitalize(cirugia.estado)}</span>
+            <span class="service-pill">${escapeHtml(cirugia.procedimiento)}</span>
+          </div>
+          ${overlaps.length ? `<div class="notas-preview">${overlaps.length} cruce${overlaps.length!==1?'s':''} con turnos</div>` : ''}
+          ${expandedCirugiaDetails(cirugia)}
+        </div>
+      </div>`;
+    }).join('');
+    ledger.querySelectorAll('.surgery-row').forEach(row=>{
+      row.onclick = ()=>{
+        expandedCirugiaId = expandedCirugiaId === row.dataset.id ? null : row.dataset.id;
+        render();
+      };
+    });
+    attachCirugiaExpandedActions();
+    return;
+  }
+
   ledger.innerHTML = matches.map(t=>{
     const d = new Date(t.fecha+'T00:00:00');
     const fechaLegible = `${DIAS_CORTAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()].slice(0,3)}`;
@@ -847,6 +1175,17 @@ document.getElementById('clearSearch').onclick = ()=>{
   document.getElementById('clearSearch').classList.remove('show');
   render();
 };
+document.querySelectorAll('.app-tab').forEach(tab=>{
+  tab.onclick = ()=>{
+    activePage = tab.dataset.page;
+    localStorage.setItem('galata-active-page', activePage);
+    expandedTurnoId = null;
+    expandedCirugiaId = null;
+    document.getElementById('searchInput').value = '';
+    document.getElementById('clearSearch').classList.remove('show');
+    render();
+  };
+});
 
 document.getElementById('f_dueno').addEventListener('input', autofillClient);
 document.getElementById('f_mascota').addEventListener('input', autofillPet);
@@ -857,6 +1196,11 @@ document.getElementById('f_fecha').addEventListener('input', ()=>{
 document.getElementById('f_hora').addEventListener('input', ()=>{
   renderTimeSlots();
   renderSlotWarning();
+});
+document.getElementById('c_dueno').addEventListener('input', autofillSurgeryClient);
+document.getElementById('c_mascota').addEventListener('input', autofillSurgeryPet);
+['c_fecha','c_horaInicio','c_horaFin'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', syncSurgeryTimeControls);
 });
 document.getElementById('loginForm').onsubmit = async (e)=>{
   e.preventDefault();
@@ -925,6 +1269,9 @@ function setEstadoChip(estado){
 document.querySelectorAll('.estado-chip').forEach(chip=>{
   chip.onclick = ()=> setEstadoChip(chip.dataset.estado);
 });
+document.querySelectorAll('.surgery-chip').forEach(chip=>{
+  chip.onclick = ()=> setCirugiaEstadoChip(chip.dataset.estado);
+});
 
 function openNew(){
   editingId = null;
@@ -972,9 +1319,64 @@ function openEdit(id){
   document.getElementById('overlay').classList.add('open');
 }
 
-document.getElementById('fabAdd').onclick = openNew;
+function setCirugiaEstadoChip(estado){
+  currentCirugiaEstado = estado;
+  document.querySelectorAll('.surgery-chip').forEach(chip=>{
+    chip.classList.remove('active-programada','active-confirmada','active-realizada','active-cancelada');
+    if(chip.dataset.estado === estado){
+      chip.classList.add('active-'+estado);
+    }
+  });
+  renderSurgeryOverlaps();
+}
+
+function openNewCirugia(){
+  editingCirugiaId = null;
+  document.getElementById('cirugiaFormTitle').textContent = 'Nueva cirugia';
+  document.getElementById('cirugiaFormSub').textContent = 'Programa la cirugia y revisa los turnos que se cruzan.';
+  document.getElementById('cirugiaForm').reset();
+  renderDirectorySuggestions();
+  document.getElementById('c_fecha').value = fmtISO(selectedDate);
+  document.getElementById('c_horaInicio').value = '10:00';
+  document.getElementById('c_horaFin').value = '12:00';
+  if(currentUserProfile && currentUserProfile.displayName){
+    setLoadedByOption(currentUserProfile.displayName, 'c_cargadoPor');
+    document.getElementById('c_cargadoPor').value = currentUserProfile.displayName;
+  }
+  document.getElementById('btnDeleteCirugia').style.display = 'none';
+  setCirugiaEstadoChip('programada');
+  syncSurgeryTimeControls();
+  document.getElementById('cirugiaOverlay').classList.add('open');
+}
+
+function openEditCirugia(id){
+  const cirugia = cirugias.find(x=>x.id===id);
+  if(!cirugia) return;
+  editingCirugiaId = id;
+  document.getElementById('cirugiaFormTitle').textContent = 'Editar cirugia';
+  document.getElementById('cirugiaFormSub').textContent = `Cargada por ${cirugia.cargadoPor||'-'}`;
+  document.getElementById('c_fecha').value = cirugia.fecha;
+  document.getElementById('c_horaInicio').value = cirugia.horaInicio;
+  document.getElementById('c_horaFin').value = cirugia.horaFin;
+  document.getElementById('c_procedimiento').value = cirugia.procedimiento;
+  document.getElementById('c_dueno').value = cirugia.dueno;
+  document.getElementById('c_mascota').value = cirugia.mascota;
+  document.getElementById('c_tipoMascota').value = cirugia.tipoMascota||'';
+  document.getElementById('c_telefono').value = cirugia.telefono||'';
+  document.getElementById('c_notas').value = cirugia.notas||'';
+  setLoadedByOption(cirugia.cargadoPor || 'Duena', 'c_cargadoPor');
+  document.getElementById('c_cargadoPor').value = cirugia.cargadoPor||'Duena';
+  document.getElementById('btnDeleteCirugia').style.display = canDeleteTurnos() ? 'inline-block' : 'none';
+  setCirugiaEstadoChip(cirugia.estado||'programada');
+  syncSurgeryTimeControls();
+  document.getElementById('cirugiaOverlay').classList.add('open');
+}
+
+document.getElementById('fabAdd').onclick = ()=> activePage === 'cirugias' ? openNewCirugia() : openNew();
 document.getElementById('btnCancel').onclick = ()=> document.getElementById('overlay').classList.remove('open');
 document.getElementById('overlay').onclick = (e)=>{ if(e.target.id==='overlay') e.currentTarget.classList.remove('open'); };
+document.getElementById('btnCancelCirugia').onclick = ()=> document.getElementById('cirugiaOverlay').classList.remove('open');
+document.getElementById('cirugiaOverlay').onclick = (e)=>{ if(e.target.id==='cirugiaOverlay') e.currentTarget.classList.remove('open'); };
 
 document.getElementById('btnDelete').onclick = async ()=>{
   if(!editingId) return;
@@ -994,6 +1396,28 @@ document.getElementById('btnDelete').onclick = async ()=>{
     console.error(err);
     await loadTurnos();
     showToast('No se pudo eliminar. Probá de nuevo.');
+  }
+};
+
+document.getElementById('btnDeleteCirugia').onclick = async ()=>{
+  if(!editingCirugiaId) return;
+  if(!canDeleteTurnos()){
+    showToast('Solo admin puede eliminar cirugias.');
+    return;
+  }
+  if(!confirm('Eliminar esta cirugia?')) return;
+  const deletedId = editingCirugiaId;
+  cirugias = cirugias.filter(t=>t.id!==editingCirugiaId);
+  try{
+    await deleteCirugia(deletedId);
+    document.getElementById('cirugiaOverlay').classList.remove('open');
+    render();
+    showToast('Cirugia eliminada');
+  }catch(err){
+    console.error(err);
+    await loadCirugias();
+    render();
+    showToast('No se pudo eliminar. Proba de nuevo.');
   }
 };
 
@@ -1076,6 +1500,73 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
     } else {
       showToast('Algo falló al guardar. Probá de nuevo.');
     }
+  }
+};
+
+document.getElementById('cirugiaForm').onsubmit = async (e)=>{
+  e.preventDefault();
+  try{
+    const fFecha = document.getElementById('c_fecha');
+    const fInicio = document.getElementById('c_horaInicio');
+    const fFin = document.getElementById('c_horaFin');
+    const fProcedimiento = document.getElementById('c_procedimiento');
+    const fDueno = document.getElementById('c_dueno');
+    const fMascota = document.getElementById('c_mascota');
+
+    let faltantes = [];
+    if(!fFecha.value) faltantes.push(fFecha);
+    if(!fInicio.value) faltantes.push(fInicio);
+    if(!fFin.value) faltantes.push(fFin);
+    if(!fProcedimiento.value.trim()) faltantes.push(fProcedimiento);
+    if(!fDueno.value.trim()) faltantes.push(fDueno);
+    if(!fMascota.value.trim()) faltantes.push(fMascota);
+
+    if(faltantes.length > 0){
+      faltantes.forEach(marcarInvalido);
+      showToast('Faltan completar campos obligatorios (marcados en rojo)');
+      faltantes[0].focus();
+      return;
+    }
+
+    if(timeToMinutes(fFin.value) <= timeToMinutes(fInicio.value)){
+      marcarInvalido(fFin);
+      showToast('La hora de fin tiene que ser posterior al inicio.');
+      fFin.focus();
+      return;
+    }
+
+    const data = {
+      id: editingCirugiaId || ('c_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+      fecha: fFecha.value,
+      horaInicio: fInicio.value,
+      horaFin: fFin.value,
+      procedimiento: fProcedimiento.value.trim(),
+      dueno: fDueno.value.trim(),
+      mascota: fMascota.value.trim(),
+      tipoMascota: document.getElementById('c_tipoMascota').value.trim(),
+      telefono: document.getElementById('c_telefono').value.trim(),
+      notas: document.getElementById('c_notas').value.trim(),
+      estado: currentCirugiaEstado,
+      cargadoPor: document.getElementById('c_cargadoPor').value
+    };
+
+    await saveCirugia(data);
+    if(editingCirugiaId){
+      const idx = cirugias.findIndex(t=>t.id===editingCirugiaId);
+      cirugias[idx] = data;
+    } else {
+      cirugias.push(data);
+    }
+    document.getElementById('cirugiaOverlay').classList.remove('open');
+    selectedDate = new Date(data.fecha+'T00:00:00');
+    syncVisibleMonth();
+    activePage = 'cirugias';
+    localStorage.setItem('galata-active-page', activePage);
+    render();
+    showToast(editingCirugiaId ? 'Cirugia actualizada' : 'Cirugia guardada');
+  }catch(err){
+    console.error(err);
+    showToast('Algo fallo al guardar la cirugia. Proba de nuevo.');
   }
 };
 

@@ -141,6 +141,32 @@
   }
   .session-badge.show{display:block;}
 
+  .app-tabs{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+    background:rgba(255,253,248,.62);
+    border:1px solid rgba(255,255,255,.72);
+    border-radius:16px;
+    padding:5px;
+    margin:0 0 14px;
+  }
+  .app-tab{
+    min-height:38px;
+    border:none;
+    border-radius:11px;
+    background:transparent;
+    color:var(--ink-soft);
+    cursor:pointer;
+    font-size:13px;
+    font-weight:900;
+  }
+  .app-tab.active{
+    background:var(--charcoal);
+    color:#fff;
+    box-shadow:0 8px 18px rgba(25,24,22,.14);
+  }
+
   /* ALERT BANNER */
   .alert-banner{
     display:none;
@@ -297,6 +323,10 @@
   .dot-confirmado{background:var(--sage);}
   .dot-realizado{background:var(--pine);}
   .dot-cancelado{background:var(--coral);}
+  .dot-programada{background:var(--mustard);}
+  .dot-confirmada{background:var(--sage);}
+  .dot-realizada{background:var(--pine);}
+  .dot-cancelada{background:var(--coral);}
 
   /* DAY LABEL */
   .day-label{
@@ -353,6 +383,10 @@
   .summary-confirmado{background:var(--sage);color:var(--pine-dark);}
   .summary-realizado{background:var(--pine);color:#fff;}
   .summary-cancelado{background:var(--coral-soft);color:#A73B30;}
+  .summary-programada{background:var(--mustard-soft);color:#8A5A0F;}
+  .summary-confirmada{background:var(--sage);color:var(--pine-dark);}
+  .summary-realizada{background:var(--pine);color:#fff;}
+  .summary-cancelada{background:var(--coral-soft);color:#A73B30;}
 
   .next-turno-panel{
     display:none;
@@ -476,6 +510,7 @@
   .turno-row:last-child{border-bottom:1px solid rgba(255,255,255,.72);}
   .turno-row:hover{background:rgba(255,255,255,.36);}
   .turno-row.estado-cancelado{opacity:.5;}
+  .turno-row.estado-cancelada{opacity:.5;}
   .turno-hora{
     font-family:'JetBrains Mono',monospace;
     font-weight:700;font-size:14px;
@@ -542,6 +577,47 @@
   .servicio-bano-corte{--service-color:#C6775D;--service-soft:#EBCFC4;--service-ink:#7E4434;}
   .servicio-deslanado{--service-color:#7F8D6B;--service-soft:#E0E5D2;--service-ink:#4E5B3D;}
   .servicio-otro{--service-color:#8A8074;--service-soft:#E6E0D8;--service-ink:#5B5148;}
+  .surgery-row{
+    --service-color:#8A5A8E;
+    --service-soft:#EFE1EE;
+    --service-ink:#653C68;
+    padding:13px 12px;
+    align-items:flex-start;
+  }
+  .surgery-row .turno-body{min-height:0;}
+  .surgery-row .turno-nombres .mascota{color:#653C68;}
+  .surgery-time{
+    min-width:50px;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    line-height:1.05;
+  }
+  .surgery-time span{
+    display:block;
+    white-space:nowrap;
+  }
+  .surgery-time span + span::before{
+    content:"- ";
+    color:var(--ink-soft);
+  }
+  .surgery-overlap-list{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-top:8px;
+  }
+  .surgery-overlap-pill{
+    border:1px solid var(--paper-line);
+    border-radius:8px;
+    background:rgba(255,255,255,.52);
+    color:var(--ink);
+    font-size:12px;
+    font-weight:700;
+    padding:7px 8px;
+  }
+  .surgery-overlap-pill strong{color:var(--coral);}
+  .surgery-overlap-pill span{color:var(--ink-soft);}
   .badge{
     font-size:10.5px;font-weight:600;
     padding:2px 8px;border-radius:20px;
@@ -551,6 +627,10 @@
   .badge-confirmado{background:var(--sage);color:var(--pine-dark);}
   .badge-realizado{background:var(--pine);color:#fff;}
   .badge-cancelado{background:var(--coral-soft);color:#A73B30;}
+  .badge-programada{background:var(--mustard-soft);color:#8A4D13;}
+  .badge-confirmada{background:var(--sage);color:var(--pine-dark);}
+  .badge-realizada{background:var(--pine);color:#fff;}
+  .badge-cancelada{background:var(--coral-soft);color:#A73B30;}
   .notas-preview{font-size:11.5px;color:var(--coral);margin-top:3px;font-style:italic;}
 
   .turno-details{
@@ -735,6 +815,20 @@
   }
   .time-slot.selected{background:var(--pine);border-color:var(--pine);color:#fff;}
   .time-slot.occupied:not(.selected){background:var(--coral-soft);border-color:var(--coral-soft);color:#A73B30;}
+  .surgery-slot-group{
+    margin:-2px 0 4px;
+  }
+  .slot-group-label{
+    color:var(--ink-soft);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    margin:0 0 5px;
+  }
+  .surgery-time-slots{
+    padding-bottom:8px;
+    margin-bottom:2px;
+  }
   .field{margin-bottom:12px;}
   .field label{
     display:block;font-size:11.5px;font-weight:600;
@@ -763,6 +857,37 @@
   .estado-chip.active-confirmado{background:var(--sage);border-color:var(--pine);color:var(--pine-dark);}
   .estado-chip.active-realizado{background:var(--pine);border-color:var(--pine);color:#fff;}
   .estado-chip.active-cancelado{background:var(--coral-soft);border-color:var(--coral);color:#A73B30;}
+  .estado-chip.active-programada{background:var(--mustard-soft);border-color:var(--mustard);color:#8A5A0F;}
+  .estado-chip.active-confirmada{background:var(--sage);border-color:var(--pine);color:var(--pine-dark);}
+  .estado-chip.active-realizada{background:var(--pine);border-color:var(--pine);color:#fff;}
+  .estado-chip.active-cancelada{background:var(--coral-soft);border-color:var(--coral);color:#A73B30;}
+  .surgery-overlaps{
+    display:none;
+    border:1px solid var(--mustard);
+    border-radius:10px;
+    background:var(--mustard-soft);
+    color:#7D541B;
+    font-size:12px;
+    font-weight:700;
+    padding:9px 10px;
+    margin:-2px 0 12px;
+  }
+  .surgery-overlaps.show{display:block;}
+  .surgery-overlaps .overlap-title{
+    color:#7D541B;
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    margin-bottom:7px;
+  }
+  .surgery-overlaps .overlap-item{
+    border-top:1px solid rgba(125,84,27,.18);
+    padding:7px 0;
+  }
+  .surgery-overlaps .overlap-item:first-of-type{border-top:none;padding-top:0;}
+  .surgery-overlaps .overlap-item:last-child{padding-bottom:0;}
+  .surgery-overlaps strong{display:block;color:var(--charcoal);font-size:12.5px;}
+  .surgery-overlaps span{display:block;color:#7D541B;font-size:11.5px;margin-top:1px;}
   .form-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px;}
   .btn{
     width:100%;

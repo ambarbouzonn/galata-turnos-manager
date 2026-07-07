@@ -45,6 +45,11 @@
     <button class="logout-btn" id="logoutButton">Salir</button>
   </header>
 
+  <nav class="app-tabs" aria-label="Secciones">
+    <button type="button" class="app-tab active" id="turnosTab" data-page="turnos">Peluquer&iacute;a</button>
+    <button type="button" class="app-tab" id="cirugiasTab" data-page="cirugias">Cirug&iacute;as</button>
+  </nav>
+
   <div class="alert-banner" id="alertBanner">
     <div class="paw-alert" id="pawAlertIcon"></div>
     <div class="alert-text" id="alertText">
@@ -167,6 +172,86 @@
       <div class="form-actions">
         <button type="button" class="btn btn-delete" id="btnDelete" style="display:none;">Eliminar</button>
         <button type="button" class="btn btn-secondary" id="btnCancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="cirugiaOverlay">
+  <div class="card-form">
+    <h2 id="cirugiaFormTitle">Nueva cirug&iacute;a</h2>
+    <div class="form-sub" id="cirugiaFormSub"></div>
+    <form id="cirugiaForm">
+      <div class="form-section-title">Cirug&iacute;a</div>
+      <div class="row2">
+        <div class="field">
+          <label>Fecha</label>
+          <input type="date" id="c_fecha">
+        </div>
+        <div class="field">
+          <label>Procedimiento</label>
+          <input type="text" id="c_procedimiento" placeholder="Ej: castraci&oacute;n">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Inicio</label>
+          <input type="time" id="c_horaInicio">
+        </div>
+        <div class="field">
+          <label>Fin estimado</label>
+          <input type="time" id="c_horaFin">
+        </div>
+      </div>
+      <div class="surgery-slot-group">
+        <div class="slot-group-label">Inicio</div>
+        <div class="time-slots surgery-time-slots" id="surgeryStartSlots"></div>
+        <div class="slot-group-label">Fin</div>
+        <div class="time-slots surgery-time-slots" id="surgeryEndSlots"></div>
+      </div>
+      <div class="surgery-overlaps" id="surgeryOverlaps"></div>
+      <div class="form-section-title">Paciente</div>
+      <div class="field">
+        <label>Due&ntilde;o/a de la mascota</label>
+        <input type="text" id="c_dueno" list="clientesList" placeholder="Ej: Mar&iacute;a L&oacute;pez">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Mascota</label>
+          <input type="text" id="c_mascota" list="mascotasList" placeholder="Ej: Rocco">
+        </div>
+        <div class="field">
+          <label>Tipo / raza</label>
+          <input type="text" id="c_tipoMascota" placeholder="Ej: Caniche">
+        </div>
+      </div>
+      <div class="field">
+        <label>Tel&eacute;fono</label>
+        <input type="tel" id="c_telefono" placeholder="11 1234 5678">
+      </div>
+      <div class="form-section-title">Notas y estado</div>
+      <div class="field">
+        <label>Notas</label>
+        <textarea id="c_notas" placeholder="Opcional"></textarea>
+      </div>
+      <div class="field">
+        <label>Estado</label>
+        <div class="estado-choices surgery-estado-choices" id="cirugiaEstadoChoices">
+          <div class="estado-chip surgery-chip" data-estado="programada">Programada</div>
+          <div class="estado-chip surgery-chip" data-estado="confirmada">Confirmada</div>
+          <div class="estado-chip surgery-chip" data-estado="realizada">Realizada</div>
+          <div class="estado-chip surgery-chip" data-estado="cancelada">Cancelada</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Cargado por</label>
+        <select id="c_cargadoPor">
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-delete" id="btnDeleteCirugia" style="display:none;">Eliminar</button>
+        <button type="button" class="btn btn-secondary" id="btnCancelCirugia">Cancelar</button>
         <button type="submit" class="btn btn-primary">Guardar</button>
       </div>
     </form>
