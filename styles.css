@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap');
 
   :root{
     --app-bg:#EFE8DD;
@@ -24,12 +24,172 @@
     --radius:14px;
   }
 
+/* La hoja clínica se declara al final para prevalecer sobre la interfaz anterior. */
+html body{background:var(--bone);background-image:none;color:var(--ink)}
+body .wrap{max-width:760px;padding-top:12px}
+body header{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:4px 0 14px;border-bottom:1px solid var(--line)}
+body .brand-lockup{grid-row:1/3;margin:0} body header h1{text-align:left;font-size:29px}
+body .subtitle{text-align:left;margin:0;font-size:13px} body .logout-btn{position:static;grid-column:3;grid-row:1/3;font-size:13px}
+body .view-switch{width:190px;margin:14px 0 10px auto;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:3px}
+body .app-tab{min-height:44px;font-size:14px;border-radius:5px} body .app-tab.active{background:var(--sage);box-shadow:none}
+body .month-card{display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:none;backdrop-filter:none}
+body .month-card.visible{display:block} body .month-day{border-radius:5px;background:var(--paper);min-height:52px}
+body .week-strip{display:grid} body .clinical-card{display:flex} body .fab{position:static}
+body .auth-card,body .card-form{background:var(--paper);border-color:var(--line);border-radius:8px}
+body button,body input,body select,body textarea{font-size:16px}
+body small,body .month-weekdays span,body .month-day .month-num,body .month-day .month-count,body .turno-meta,body .notas-preview,body .time-slot,body .status-stamp{font-size:12px}
+@media(max-width:430px){body header h1{font-size:25px}}
+
+/* Prioridad final de la tarjeta clínica compacta */
+body .clinical-card{display:grid;grid-template-columns:58px minmax(0,1fr);gap:4px 12px;min-height:0;padding:14px 14px 13px 12px}
+body .clinical-time{grid-column:1;grid-row:1/4;padding-top:3px}
+body .clinical-body{grid-column:2;min-width:0;padding-right:0}
+body .clinical-body h3{padding-right:70px;line-height:1.25}
+body .clinical-card .status-actions{display:flex;flex-wrap:wrap;gap:7px}
+body .clinical-card .status-actions button{width:auto;min-width:86px;min-height:44px;padding:9px 13px}
+body .clinical-card .contact-rail{position:static;grid-column:2;display:flex;flex-direction:row;align-items:center;width:auto;flex-basis:auto;gap:8px;margin-top:10px}
+body .clinical-card .contact-icon-btn{width:44px;height:44px;flex:0 0 44px}
+@media(max-width:520px){
+  body .clinical-card{display:grid;grid-template-columns:48px minmax(0,1fr);padding:13px 10px}
+  body .clinical-card .status-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  body .clinical-card .status-actions button{width:100%;min-width:0;padding:8px 5px;font-size:12px}
+}
+
+/* Formularios guiados en dos pasos */
+.wizard-progress{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;margin:4px 0 20px;color:var(--ink-faint);font-size:13px;font-weight:700}
+.wizard-progress span{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.wizard-progress span b{display:grid;place-items:center;width:28px;height:28px;border:1.5px solid var(--line);border-radius:50%;background:var(--paper);color:var(--ink-soft)}
+.wizard-progress span.active{color:var(--sage-dark)}
+.wizard-progress span.active b{border-color:var(--sage);background:var(--sage);color:#fff}
+.wizard-progress i{height:2px;background:var(--line)}
+.wizard-step{display:none;animation:wizard-in .18s ease-out}
+.wizard-step.active{display:block}
+.wizard-step .form-section-title:first-child{margin-top:0}
+.wizard-next{display:block;width:100%;margin-top:18px;min-height:48px}
+.wizard-back{white-space:nowrap}
+.wizard-step-two .form-actions{grid-template-columns:auto 1fr 1fr}
+.wizard-step-two .btn-delete{grid-column:1/-1;order:4}
+@keyframes wizard-in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+@media(max-width:520px){
+  .card-form{max-height:calc(100dvh - 8px)}
+  .wizard-progress{margin-bottom:14px}
+  .wizard-progress span{font-size:12px}
+  .wizard-step-two .form-actions{grid-template-columns:1fr 1fr}
+  .wizard-step-two .wizard-back{grid-column:1/-1}
+}
+
+/* Tarjeta clínica compacta */
+body .clinical-card{
+  display:grid;
+  grid-template-columns:58px minmax(0,1fr);
+  gap:4px 12px;
+  min-height:0;
+  padding:14px 14px 13px 12px;
+  overflow:visible;
+}
+body .clinical-time{grid-column:1;grid-row:1/4;padding-top:3px}
+body .clinical-body{grid-column:2;min-width:0;padding-right:0}
+body .clinical-body h3{padding-right:70px;line-height:1.25}
+body .clinical-body .quick-actions{margin-top:12px}
+body .clinical-card .status-actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:7px;
+}
+body .clinical-card .status-actions button{
+  width:auto;
+  min-width:86px;
+  min-height:44px;
+  padding:9px 13px;
+  line-height:1;
+}
+body .clinical-card .contact-rail{
+  position:static;
+  grid-column:2;
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  width:auto;
+  flex-basis:auto;
+  gap:8px;
+  margin-top:10px;
+}
+body .clinical-card .contact-icon-btn{width:44px;height:44px;flex:0 0 44px}
+body .clinical-card .status-stamp{right:12px;top:12px}
+@media(max-width:520px){
+  body .clinical-card{grid-template-columns:48px minmax(0,1fr);padding:13px 10px}
+  body .clinical-body h3{padding-right:62px}
+  body .clinical-card .status-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  body .clinical-card .status-actions button{width:100%;min-width:0;padding:8px 6px;font-size:12px}
+}
+
+/* Ficha clínica — nueva capa visual */
+:root{
+  --bone:#F7F4EE;--paper:#FFFFFF;--line:#E6E0D3;--ink:#1C1B19;
+  --ink-soft:#726C63;--ink-faint:#A39C8E;--sage:#4F7A5E;--sage-dark:#33513E;
+  --sage-soft:#DCEAE0;--surgery:#5C7D93;--surgery-dark:#3E5A6C;
+  --surgery-soft:#DCE6EC;--terracotta:#B85A38;--terracotta-soft:#F2DCCF;
+  --mustard:#C1912F;--mustard-soft:#F3E6C6;--free:#EDEAE0;
+  --app-bg:var(--bone);--paper-line:var(--line);--pine:var(--sage);--pine-dark:var(--sage-dark);
+  --coral:var(--terracotta);--coral-soft:var(--terracotta-soft);--charcoal:var(--ink);
+}
+html,body{background:var(--bone);font-size:15px;background-image:none}
+body{min-width:320px}
+button,input,select,textarea{font-family:'Nunito',sans-serif;font-size:16px}
+button,[role="button"],a,input,select,.estado-chip{min-height:44px;min-width:44px}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--sage) 55%,transparent);outline-offset:3px}
+.wrap{max-width:760px;padding-top:12px}
+header{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:4px 0 14px;border-bottom:1px solid var(--line)}
+.brand-lockup{grid-row:1/3;margin:0}.brand-mark{width:50px;height:50px;border-radius:50%;box-shadow:none}
+header h1{text-align:left;font-size:29px}.subtitle{text-align:left;margin:0;font-size:13px}
+.logout-btn{position:static;grid-column:3;grid-row:1/3;background:var(--paper);font-size:13px}
+.connection-status{grid-column:2;display:flex;align-items:center;gap:6px;color:var(--ink-soft);font-size:13px;font-weight:600}
+.connection-status>span:first-child{width:8px;height:8px;min-width:8px;border-radius:50%;background:var(--sage)}
+.connection-status.offline>span:first-child{background:var(--terracotta)}
+.session-badge{display:none!important}
+.view-switch{width:190px;margin:14px 0 10px auto;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:3px}
+.app-tab{min-height:44px;font-size:14px;border-radius:5px}.app-tab.active{background:var(--sage);box-shadow:none}
+.search-box input{background:var(--paper);border:1px solid var(--line);border-radius:6px}
+.month-card{display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:none;backdrop-filter:none}
+.month-card.visible{display:block}.month-day{border-radius:5px;background:var(--paper);min-height:52px}
+.month-day.is-selected{background:var(--sage-dark)}
+.occupancy-track{display:block;width:80%;height:4px;background:var(--free);border-radius:3px;overflow:hidden}
+.occupancy-bar{display:block;height:100%;border-radius:3px}.occupancy-bar.low{background:var(--sage)}.occupancy-bar.medium{background:var(--mustard)}.occupancy-bar.high{background:var(--terracotta)}
+.week-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:12px 0 18px}
+.week-day{padding:6px 2px;border:1px solid var(--line);background:var(--paper);border-radius:6px;color:var(--ink-soft)}
+.week-day span{display:block;font-size:13px;text-transform:uppercase}.week-day strong{font-size:18px;color:var(--ink)}
+.week-day i{height:8px;display:flex;justify-content:center;gap:3px;margin-top:3px}.week-day i b{width:6px;height:6px;border-radius:50%}.groom-dot{background:var(--sage)}.surgery-dot{background:var(--surgery)}
+.week-day.active{background:var(--sage-dark);color:white}.week-day.active strong{color:white}.week-day.today:not(.active){border:2px solid var(--sage)}
+.day-label{font-size:24px;margin-top:10px}.day-label .count,.compact-toggle{font-family:'Nunito';font-size:13px}.compact-toggle{display:none}
+.time-ruler{margin:10px 0 22px}.ruler-heading{display:flex;justify-content:space-between;margin-bottom:8px;color:var(--ink-soft);font-size:13px}.ruler-heading strong{color:var(--ink);font-size:15px}
+.ruler-scroll{display:flex;overflow-x:auto;gap:5px;padding:2px 2px 8px;scrollbar-color:var(--line) transparent}
+.ruler-slot{flex:0 0 116px;height:66px;border:1px solid var(--line);border-radius:5px;text-align:left;padding:8px;background:var(--paper);color:var(--ink)}
+.ruler-slot time{display:block;font:800 13px 'Nunito';font-variant-numeric:tabular-nums;margin-bottom:5px}.ruler-slot span{font-size:12px;line-height:1.2;display:block}.ruler-slot.grooming{background:var(--sage-soft);border-color:var(--sage)}.ruler-slot.surgery{background:var(--surgery-soft);border-color:var(--surgery)}
+.ruler-slot.free{background:repeating-linear-gradient(135deg,var(--paper),var(--paper) 7px,var(--free) 8px,var(--free) 9px);color:var(--sage-dark);cursor:pointer}
+.ledger{position:relative;gap:12px;padding-left:20px}.ledger:before{content:"";position:absolute;left:7px;top:20px;bottom:20px;width:1px;background:var(--line)}
+.clinical-card{position:relative;display:flex;gap:12px;align-items:flex-start;background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--sage);border-radius:5px;padding:16px 74px 16px 12px;min-height:126px;cursor:pointer}
+.clinical-card.surgery{border-left-color:var(--surgery)}.timeline-node{position:absolute;left:-22px;top:25px;width:11px;height:11px;border:3px solid var(--bone);border-radius:50%;background:var(--sage);box-shadow:0 0 0 1px var(--sage)}.surgery .timeline-node{background:var(--surgery);box-shadow:0 0 0 1px var(--surgery)}
+.clinical-time{font:800 15px 'Nunito';font-variant-numeric:tabular-nums;min-width:49px;padding-top:3px}.clinical-body{min-width:0;flex:1}.clinical-body h3{font:700 17px 'Nunito';margin:0 0 8px}.clinical-body h3 small{font-size:14px;color:var(--ink-soft);font-weight:500}
+.service-tag{display:inline-block;padding:5px 8px;background:var(--sage-soft);color:var(--sage-dark);border-radius:4px;font-size:13px;font-weight:700}.surgery .service-tag{background:var(--surgery-soft);color:var(--surgery-dark)}.pet-type{font-size:13px;color:var(--ink-soft);margin-left:7px}.clinical-note{font-size:13px;color:var(--terracotta);margin:9px 0 0}
+.status-stamp{position:absolute;right:10px;top:10px;width:62px;height:62px;border:2px double var(--sage);border-radius:50%;display:flex;align-items:center;justify-content:center;transform:rotate(-11deg);font-size:10px;font-weight:800;text-transform:uppercase;color:var(--sage-dark)}
+.stamp-realizado{background:var(--sage-dark);color:white;border-color:var(--sage-dark)}.stamp-cancelado{color:var(--terracotta);border-color:var(--terracotta)}
+.status-actions button{min-height:44px;border-radius:4px;font-size:13px}.status-actions button:first-child{background:var(--sage);color:white;border-color:var(--sage)}.status-actions button:last-child{color:var(--terracotta);border-color:var(--terracotta);background:white}
+.contact-rail{position:absolute;right:10px;bottom:10px;flex-direction:row;width:auto}.contact-icon-btn{width:44px;height:44px;box-shadow:0 2px 5px rgba(28,27,25,.12)}
+.fab-actions{position:fixed;right:calc(50% - 360px);bottom:22px;display:flex;align-items:center;gap:8px;z-index:20}.fab{position:static;background:var(--sage);box-shadow:0 5px 14px rgba(51,81,62,.25)}.fab-secondary{height:48px;border:1px solid var(--surgery);border-radius:24px;background:var(--surgery);color:white;padding:0 16px;font-weight:700}
+.toast{display:flex;align-items:center;gap:14px}.toast button{display:none;border:1px solid white;background:transparent;color:white;border-radius:4px;font-weight:800}.toast button.show{display:block}
+.hidden{display:none!important}
+.alert-banner{border-radius:5px}.auth-card,.card-form{background:var(--paper);border-color:var(--line);border-radius:8px;box-shadow:0 12px 35px rgba(28,27,25,.12)}
+.field input,.field select,.field textarea{font-size:16px;background:var(--paper);border-color:var(--line)}
+@media(max-width:760px){.fab-actions{right:16px}.clinical-card{padding-right:68px}.week-strip{gap:2px}.week-day{min-width:0}.week-day span{font-size:12px}.week-day strong{font-size:16px}}
+@media(max-width:430px){header h1{font-size:25px}.connection-status{font-size:12px}.clinical-card{display:block;padding:13px 64px 13px 10px}.clinical-time{display:block;margin-bottom:8px}.clinical-body h3{font-size:16px}.status-actions{grid-template-columns:1fr}.contact-rail{position:static;margin-top:10px}.fab-secondary{padding:0 12px}.day-label{font-size:20px}}
+
   *{box-sizing:border-box;}
   html{
     touch-action:manipulation;
     -webkit-text-size-adjust:100%;
   }
-  html,body{margin:0;padding:0;background:var(--app-bg);color:var(--ink);font-family:'Inter',sans-serif;}
+  html,body{margin:0;padding:0;background:var(--app-bg);color:var(--ink);font-family:'Nunito',sans-serif;}
   body{
     background-image:
       radial-gradient(circle at 78% 30%, rgba(197,154,99,.16) 0 120px, transparent 250px),
@@ -40,8 +200,9 @@
 
   .wrap{max-width:640px;margin:0 auto;padding:18px 16px 96px;}
   body.authenticated .auth-screen{display:none;}
-  body:not(.authenticated) .wrap,
-  body:not(.authenticated) .fab{display:none;}
+body:not(.authenticated) .wrap,
+  body:not(.authenticated) .fab,
+  body:not(.authenticated) .fab-actions{display:none;}
 
   .auth-screen{
     min-height:100vh;
@@ -111,7 +272,7 @@
     margin-bottom:10px;
   }
   h1{
-    font-family:'Fraunces',serif;
+    font-family:'Fredoka',sans-serif;
     font-size:30px;
     font-weight:700;
     margin:0;
@@ -197,7 +358,7 @@
     border:1px solid rgba(255,255,255,.78);
     border-radius:18px;
     background:rgba(255,253,248,.78);
-    font-family:'Inter',sans-serif;
+    font-family:'Nunito',sans-serif;
     font-size:16px;
     color:var(--ink);
   }
@@ -211,7 +372,7 @@
   }
   .search-box .clear-search.show{display:flex;}
   .search-result-date{
-    font-family:'JetBrains Mono',monospace;
+    font-family:'Nunito',sans-serif;font-variant-numeric:tabular-nums;
     font-size:10.5px;font-weight:700;color:var(--ink-soft);
     padding:1px 0 0 2px;
   }
@@ -239,7 +400,7 @@
     background:transparent;
     color:var(--pine-dark);
     cursor:pointer;
-    font-family:'Fraunces',serif;
+    font-family:'Fredoka',sans-serif;
     font-size:17px;
     font-weight:700;
     padding:5px;
@@ -290,7 +451,7 @@
     align-items:center;
     justify-content:center;
     gap:3px;
-    font-family:'Inter',sans-serif;
+    font-family:'Nunito',sans-serif;
   }
   .month-day:hover{border-color:rgba(197,154,99,.45);}
   .month-day.is-empty{visibility:hidden;pointer-events:none;}
@@ -330,7 +491,7 @@
 
   /* DAY LABEL */
   .day-label{
-    font-family:'Fraunces',serif;
+    font-family:'Fredoka',sans-serif;
     font-size:19px;
     font-weight:600;
     color:var(--charcoal);
@@ -359,7 +520,7 @@
     color:#fff;
   }
   .day-label .count{
-    font-family:'Inter',sans-serif;
+    font-family:'Nunito',sans-serif;
     font-size:11.5px;font-weight:600;
     color:var(--ink-soft);
     background:var(--card);
@@ -512,7 +673,7 @@
   .turno-row.estado-cancelado{opacity:.5;}
   .turno-row.estado-cancelada{opacity:.5;}
   .turno-hora{
-    font-family:'JetBrains Mono',monospace;
+    font-family:'Nunito',sans-serif;font-variant-numeric:tabular-nums;
     font-weight:700;font-size:14px;
     color:var(--charcoal);
     min-width:48px;padding-top:2px;
@@ -676,51 +837,6 @@
     padding:8px;
   }
 
-  .pet-history{
-    display:none;
-    background:var(--card);
-    border:1px solid var(--paper-line);
-    border-radius:10px;
-    padding:10px;
-    margin:2px 0 12px;
-  }
-  .pet-history.show{display:block;}
-  .pet-history-title{
-    color:var(--pine-dark);
-    font-size:11.5px;
-    font-weight:800;
-    text-transform:uppercase;
-    letter-spacing:0;
-    margin-bottom:7px;
-  }
-  .history-item{
-    border-top:1px solid var(--paper-line);
-    padding:8px 0;
-  }
-  .history-item:first-of-type{border-top:none;padding-top:0;}
-  .history-item:last-child{padding-bottom:0;}
-  .history-main{
-    display:flex;
-    gap:7px;
-    flex-wrap:wrap;
-    color:var(--ink);
-    font-size:12px;
-    font-weight:700;
-  }
-  .history-meta{
-    display:flex;
-    gap:6px;
-    flex-wrap:wrap;
-    align-items:center;
-    color:var(--ink-soft);
-    font-size:11px;
-    margin-top:4px;
-  }
-  .history-note{
-    color:var(--coral);
-    font-style:italic;
-  }
-
   /* FAB */
   .fab{
     position:fixed;bottom:24px;right:50%;transform:translateX(320px);
@@ -769,7 +885,7 @@
     .card-form{border-radius:16px;}
   }
   .card-form h2{
-    font-family:'Fraunces',serif;font-size:20px;color:var(--pine-dark);margin:0 0 4px;
+    font-family:'Fredoka',sans-serif;font-size:20px;color:var(--pine-dark);margin:0 0 4px;
   }
   .card-form .form-sub{font-size:12px;color:var(--ink-soft);margin-bottom:16px;}
   .form-section-title{
@@ -841,10 +957,10 @@
     max-width:100%;
     padding:10px 11px;
     border:1px solid var(--paper-line);border-radius:9px;
-    font-family:'Inter',sans-serif;font-size:16px;color:var(--ink);
+    font-family:'Nunito',sans-serif;font-size:16px;color:var(--ink);
     background:var(--card);
   }
-  .field textarea{resize:vertical;min-height:52px;font-family:'Inter',sans-serif;}
+  .field textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-serif;}
   .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--pine);outline-offset:1px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .estado-choices{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:6px;}
@@ -892,7 +1008,7 @@
   .btn{
     width:100%;
     padding:12px;border-radius:10px;border:none;
-    font-weight:700;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif;
+    font-weight:700;font-size:14px;cursor:pointer;font-family:'Nunito',sans-serif;
   }
   .btn-primary{background:var(--pine);color:#fff;}
   .btn-primary:hover{background:var(--pine-dark);}
@@ -1100,3 +1216,107 @@
       padding-right:2px;
     }
   }
+
+/* Prioridad final del rediseño Ficha Clínica */
+html body{background:var(--bone);background-image:none;color:var(--ink)}
+body .wrap{max-width:760px;padding-top:12px}
+body header{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:4px 0 14px;border-bottom:1px solid var(--line)}
+body .brand-lockup{grid-row:1/3;margin:0} body header h1{text-align:left;font-size:29px}
+body .subtitle{text-align:left;margin:0;font-size:13px} body .logout-btn{position:static;grid-column:3;grid-row:1/3;font-size:13px}
+body .view-switch{width:190px;margin:14px 0 10px auto;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:3px}
+body .app-tab{min-height:44px;font-size:14px;border-radius:5px} body .app-tab.active{background:var(--sage);box-shadow:none}
+body .month-card{display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:none;backdrop-filter:none}
+body .month-card.visible{display:block} body .month-day{border-radius:5px;background:var(--paper);min-height:52px}
+body .week-strip{display:grid} body .clinical-card{display:flex} body .fab{position:static}
+body .auth-card,body .card-form{background:var(--paper);border-color:var(--line);border-radius:8px}
+body button,body input,body select,body textarea{font-size:16px}
+body small,body .month-weekdays span,body .month-day .month-num,body .month-day .month-count,body .turno-meta,body .notas-preview,body .time-slot,body .status-stamp{font-size:12px}
+@media(max-width:430px){body header h1{font-size:25px}}
+body .clinical-card{display:grid;grid-template-columns:58px minmax(0,1fr);gap:4px 12px;min-height:0;padding:14px 14px 13px 12px}
+body .clinical-time{grid-column:1;grid-row:1/4;padding-top:3px}
+body .clinical-body{grid-column:2;min-width:0;padding-right:0}
+body .clinical-body h3{padding-right:70px;line-height:1.25}
+body .clinical-card .status-actions{display:flex;flex-wrap:wrap;gap:7px}
+body .clinical-card .status-actions button{width:auto;min-width:86px;min-height:44px;padding:9px 13px}
+body .clinical-card .contact-rail{position:static;grid-column:2;display:flex;flex-direction:row;align-items:center;width:auto;flex-basis:auto;gap:8px;margin-top:10px}
+body .clinical-card .contact-icon-btn{width:44px;height:44px;flex:0 0 44px}
+@media(max-width:520px){body .clinical-card{display:grid;grid-template-columns:48px minmax(0,1fr);padding:13px 10px}body .clinical-card .status-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}body .clinical-card .status-actions button{width:100%;min-width:0;padding:8px 5px;font-size:12px}}
+
+/* Toast inferior: no tapa el encabezado y permite pulsar Deshacer */
+body .toast{
+  top:auto;
+  right:auto;
+  bottom:24px;
+  left:50%;
+  width:max-content;
+  max-width:calc(100vw - 32px);
+  min-height:52px;
+  padding:8px 8px 8px 16px;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:8px;
+  background:var(--sage-dark);
+  box-shadow:0 12px 30px rgba(28,27,25,.24);
+  opacity:0;
+  pointer-events:none;
+  transform:translate(-50%,16px);
+  transition:opacity .2s ease,transform .2s ease;
+  z-index:100;
+}
+body .toast.show{top:auto;opacity:1;pointer-events:auto;transform:translate(-50%,0)}
+body .toast #toastMessage{font-size:14px;font-weight:700;line-height:1.25}
+body .toast button{
+  display:none;
+  min-width:auto;
+  min-height:40px;
+  padding:7px 11px;
+  border:1px solid rgba(255,255,255,.7);
+  border-radius:5px;
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  font-size:14px;
+}
+body .toast button.show{display:block}
+@media(max-width:520px){body .toast{bottom:calc(84px + env(safe-area-inset-bottom));width:calc(100vw - 28px);justify-content:space-between}}
+
+/* Navegación semanal por gesto horizontal */
+body .week-strip{touch-action:pan-y;user-select:none;transition:transform .18s ease,opacity .18s ease}
+body .week-strip.is-dragging{cursor:grabbing}
+body .week-strip.slide-next{animation:week-from-right .2s ease}
+body .week-strip.slide-prev{animation:week-from-left .2s ease}
+@keyframes week-from-right{from{opacity:.25;transform:translateX(22px)}to{opacity:1;transform:none}}
+@keyframes week-from-left{from{opacity:.25;transform:translateX(-22px)}to{opacity:1;transform:none}}
+
+.week-navigation{position:relative;padding-top:0}
+body .week-navigation .week-strip{margin:12px 0 5px}
+.quick-today{position:static;display:block;width:54px;min-height:44px;min-width:44px;margin:0 0 10px auto;padding:4px 10px;border:1px solid var(--sage);border-radius:999px;background:var(--paper);color:var(--sage-dark);font-size:12px;font-weight:800;cursor:pointer}
+.quick-today:hover:not(:disabled){background:var(--sage-soft)}
+.quick-today.is-current{border-color:var(--line);color:var(--ink-faint);background:transparent;cursor:default}
+
+/* Eliminar queda siempre accesible al abrir una edición */
+.card-form{position:relative}
+.card-form>h2{padding-right:58px}
+.form-delete-top{
+  position:absolute;
+  top:14px;
+  right:14px;
+  z-index:2;
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  min-width:44px;
+  min-height:44px;
+  margin:0;
+  padding:10px;
+  border:1px solid var(--terracotta);
+  border-radius:5px;
+  background:var(--paper);
+  color:var(--terracotta);
+}
+.form-delete-top svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.form-delete-top:hover{background:var(--terracotta-soft)}
+@media(max-width:420px){.card-form>h2{padding-right:54px}.form-delete-top{top:12px;right:12px}}
+
+/* Tipografía redondeada */
+body h1,body h2,body .day-label,body .month-title,body .auth-card h1{font-family:'Fredoka',sans-serif}
+body,body button,body input,body select,body textarea{font-family:'Nunito',sans-serif}

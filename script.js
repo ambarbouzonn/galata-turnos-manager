@@ -17,7 +17,10 @@ let directory = { clientes: [], mascotas: [] };
 let expandedTurnoId = null;
 let expandedCirugiaId = null;
 let compactMode = localStorage.getItem('galata-compact-mode') === '1';
-let activePage = localStorage.getItem('galata-active-page') === 'cirugias' ? 'cirugias' : 'turnos';
+let activePage = 'unified';
+let viewMode = localStorage.getItem('galata-view-mode') === 'month' ? 'month' : 'today';
+let undoTimer = null;
+let pendingUndo = null;
 
 function fmtISO(d){
   const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
@@ -339,15 +342,8 @@ function renderCompactToggle(){
 }
 
 function renderPageTabs(){
-  document.querySelectorAll('.app-tab').forEach(tab=>{
-    tab.classList.toggle('active', tab.dataset.page === activePage);
-  });
-  const searchInput = document.getElementById('searchInput');
-  if(searchInput){
-    searchInput.placeholder = activePage === 'cirugias'
-      ? 'Buscar por duenio/a, mascota o procedimiento...'
-      : 'Buscar por duenio/a o mascota...';
-  }
+  document.querySelectorAll('[data-view]').forEach(tab=>tab.classList.toggle('active', tab.dataset.view === viewMode));
+  document.getElementById('searchInput').placeholder = 'Buscar por dueño/a, mascota o servicio...';
 }
 
 function renderNextTurnoPanel(dayTurnos){
@@ -602,18 +598,6 @@ function openInstagram(id){
   );
 }
 
-function setLoadedByOption(displayName, selectId = 'f_cargadoPor'){
-  const select = document.getElementById(selectId);
-  if(!displayName) return;
-  let option = Array.from(select.options).find(opt => opt.value === displayName);
-  if(!option){
-    option = document.createElement('option');
-    option.value = displayName;
-    option.textContent = displayName;
-    select.prepend(option);
-  }
-}
-
 function selectedClient(){
   const value = normalizeLookup(document.getElementById('f_dueno').value);
   return directory.clientes.find(cliente => cliente.nombreNormalizado === value) || null;
@@ -626,55 +610,6 @@ function selectedPet(){
     mascota.nombreNormalizado === petValue &&
     (!client || mascota.clienteNormalizado === client.nombreNormalizado)
   ) || null;
-}
-
-function petHistoryItems(){
-  const owner = normalizeLookup(document.getElementById('f_dueno').value);
-  const pet = normalizeLookup(document.getElementById('f_mascota').value);
-  if(!owner || !pet) return [];
-
-  return turnos
-    .filter(turno =>
-      turno.id !== editingId &&
-      normalizeLookup(turno.dueno) === owner &&
-      normalizeLookup(turno.mascota) === pet
-    )
-    .sort((a,b)=> (b.fecha+b.hora).localeCompare(a.fecha+a.hora))
-    .slice(0, 5);
-}
-
-function renderPetHistory(){
-  const container = document.getElementById('petHistory');
-  if(!container) return;
-
-  const items = petHistoryItems();
-  if(items.length === 0){
-    container.classList.remove('show');
-    container.innerHTML = '';
-    return;
-  }
-
-  container.classList.add('show');
-  container.innerHTML = `
-    <div class="pet-history-title">Historial de esta mascota</div>
-    ${items.map(turno => {
-      const d = new Date(turno.fecha+'T00:00:00');
-      const fecha = `${d.getDate()} ${MESES[d.getMonth()].slice(0,3)} ${d.getFullYear()}`;
-      return `
-        <div class="history-item">
-          <div class="history-main">
-            <span>${fecha}</span>
-            <span>${escapeHtml(turno.hora)}</span>
-            <span>${escapeHtml(turno.servicio)}</span>
-          </div>
-          <div class="history-meta">
-            <span class="badge badge-${turno.estado}">${capitalize(turno.estado)}</span>
-            ${turno.tipoMascota ? `<span>${escapeHtml(turno.tipoMascota)}</span>` : ''}
-            ${turno.notas ? `<span class="history-note">${escapeHtml(turno.notas)}</span>` : ''}
-          </div>
-        </div>`;
-    }).join('')}
-  `;
 }
 
 async function updateTurnoEstado(id, estado){
@@ -692,7 +627,9 @@ async function updateTurnoEstado(id, estado){
     await saveTurno(updated);
     turnos = turnos.map(t=>t.id===id ? updated : t);
     render();
-    showToast(`Turno ${capitalize(estado)}`);
+    if(estado==='cancelado'){
+      offerUndo('Turno cancelado', async ()=>{ await saveTurno(current); turnos=turnos.map(t=>t.id===id?current:t); render(); showToast('Cancelación deshecha'); });
+    } else showToast(`Turno ${capitalize(estado)}`);
   }catch(err){
     console.error(err);
     showToast('No se pudo cambiar el estado.');
@@ -700,7 +637,7 @@ async function updateTurnoEstado(id, estado){
 }
 
 function attachQuickActions(){
-  document.querySelectorAll('.turno-row button[data-action]').forEach(button=>{
+  document.querySelectorAll('.turno-row button[data-action], .clinical-card button[data-action]').forEach(button=>{
     button.onclick = (event)=>{
       event.stopPropagation();
       if(button.dataset.action === 'whatsapp'){
@@ -751,7 +688,6 @@ function autofillClient(){
   if(client && client.instagram && !document.getElementById('f_instagram').value.trim()){
     document.getElementById('f_instagram').value = client.instagram;
   }
-  renderPetHistory();
 }
 
 function autofillPet(){
@@ -759,7 +695,6 @@ function autofillPet(){
   if(pet && pet.tipoMascota && !document.getElementById('f_tipoMascota').value.trim()){
     document.getElementById('f_tipoMascota').value = pet.tipoMascota;
   }
-  renderPetHistory();
 }
 
 function selectedClientFromFields(ownerId){
@@ -806,8 +741,6 @@ async function showAppForUser(user, profile = null){
   document.body.classList.add('authenticated');
   document.getElementById('loginError').textContent = '';
   if(user) renderSessionBadge(user, currentUserProfile);
-  setLoadedByOption(currentUserProfile && currentUserProfile.displayName);
-  setLoadedByOption(currentUserProfile && currentUserProfile.displayName, 'c_cargadoPor');
   await loadData();
 }
 
@@ -844,17 +777,37 @@ async function initAuth(){
 }
 function showToast(msg){
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  document.getElementById('toastMessage').textContent = msg;
+  document.getElementById('toastUndo').classList.remove('show');
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
+
+function offerUndo(message, action){
+  clearTimeout(undoTimer);
+  pendingUndo = action;
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMessage').textContent = message;
+  document.getElementById('toastUndo').classList.add('show');
+  toast.classList.add('show');
+  undoTimer = setTimeout(()=>{ pendingUndo=null; toast.classList.remove('show'); }, 6000);
+}
+
+document.getElementById('toastUndo').onclick = async ()=>{
+  if(!pendingUndo) return;
+  const restore = pendingUndo;
+  pendingUndo = null;
+  clearTimeout(undoTimer);
+  document.getElementById('toast').classList.remove('show');
+  await restore();
+};
 
 function renderMonthView(){
   const grid = document.getElementById('monthGrid');
   const title = document.getElementById('monthTitle');
   grid.innerHTML = '';
   title.textContent = `${MESES[visibleMonth.getMonth()]} ${visibleMonth.getFullYear()}`;
-  document.getElementById('subtitle').textContent = activePage === 'cirugias' ? 'Calendario de cirugias' : 'Calendario de turnos';
+  document.getElementById('subtitle').textContent = 'Agenda clínica unificada';
 
   const first = new Date(visibleMonth);
   const firstWeekday = (first.getDay() + 6) % 7;
@@ -872,28 +825,25 @@ function renderMonthView(){
   for(let day=1;day<=daysInMonth;day++){
     const d = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
     const iso = fmtISO(d);
-    const dayItems = activePage === 'cirugias'
-      ? cirugias.filter(t=>t.fecha===iso)
-      : turnos.filter(t=>t.fecha===iso);
-    const states = activePage === 'cirugias' ? CIRUGIA_ESTADOS : ESTADOS;
-    const counts = activePage === 'cirugias' ? surgeryStatusCounts(dayItems) : statusCounts(dayItems);
-    const count = dayItems.filter(t=>t.estado !== (activePage === 'cirugias' ? 'cancelada' : 'cancelado')).length;
-    const dots = states
-      .filter(estado => counts[estado] > 0)
-      .map(estado => `<span class="month-dot dot-${estado}"></span>`)
-      .join('');
+    const dayTurnos = turnos.filter(t=>t.fecha===iso && t.estado!=='cancelado');
+    const dayCirugias = cirugias.filter(t=>t.fecha===iso && t.estado!=='cancelada');
+    const count = dayTurnos.length + dayCirugias.length;
+    const occupancy = Math.min(count / 8, 1);
+    const level = occupancy >= .75 ? 'high' : occupancy >= .4 ? 'medium' : 'low';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'month-day'
       + (iso===selectedISO ? ' is-selected' : '')
       + (iso===today ? ' is-today' : '')
       + (count>0 ? ' has-turnos' : '');
-    btn.innerHTML = `<span class="month-num">${day}</span><span class="month-dots">${dots}</span>`;
+    btn.innerHTML = `<span class="month-num">${day}</span><span class="occupancy-track"><span class="occupancy-bar ${level}" style="width:${Math.max(occupancy*100, count?25:0)}%"></span></span>`;
     btn.onclick = ()=>{
       selectedDate = d;
       syncVisibleMonth();
       document.getElementById('searchInput').value = '';
       document.getElementById('clearSearch').classList.remove('show');
+      viewMode = 'today';
+      localStorage.setItem('galata-view-mode', viewMode);
       render();
     };
     grid.appendChild(btn);
@@ -1040,18 +990,128 @@ function renderCirugiasDay(){
   attachCirugiaExpandedActions();
 }
 
+function statusStamp(estado, isSurgery=false){
+  const normalized = ({confirmada:'confirmado', realizada:'realizado', cancelada:'cancelado'})[estado] || estado;
+  if(normalized === 'pendiente' || normalized === 'programada') return '';
+  return `<span class="status-stamp stamp-${normalized}">${normalized}</span>`;
+}
+
+function renderWeekStrip(){
+  const strip = document.getElementById('weekStrip');
+  const quickToday=document.getElementById('quickTodayButton');
+  const isToday=fmtISO(selectedDate)===todayISO();
+  quickToday.disabled=isToday;
+  quickToday.classList.toggle('is-current',isToday);
+  const center = new Date(selectedDate);
+  const mondayOffset = (center.getDay()+6)%7;
+  const monday = new Date(center); monday.setDate(center.getDate()-mondayOffset);
+  strip.innerHTML = Array.from({length:7}, (_,i)=>{
+    const d = new Date(monday); d.setDate(monday.getDate()+i);
+    const iso = fmtISO(d);
+    const hasGrooming = turnos.some(t=>t.fecha===iso && t.estado!=='cancelado');
+    const hasSurgery = cirugias.some(c=>c.fecha===iso && c.estado!=='cancelada');
+    return `<button type="button" class="week-day ${iso===fmtISO(selectedDate)?'active':''} ${iso===todayISO()?'today':''}" data-date="${iso}"><span>${DIAS_CORTAS[d.getDay()].slice(0,2)}</span><strong>${d.getDate()}</strong><i>${hasGrooming?'<b class="groom-dot"></b>':''}${hasSurgery?'<b class="surgery-dot"></b>':''}</i></button>`;
+  }).join('');
+  strip.querySelectorAll('[data-date]').forEach(btn=>btn.onclick=()=>{ selectedDate=new Date(btn.dataset.date+'T00:00:00'); syncVisibleMonth(); render(); });
+}
+
+function setupWeekSwipe(){
+  const strip=document.getElementById('weekStrip');
+  let startX=0;
+  let startY=0;
+  let tracking=false;
+  let swipeConsumed=false;
+
+  strip.addEventListener('pointerdown',event=>{
+    startX=event.clientX;
+    startY=event.clientY;
+    tracking=true;
+    strip.classList.add('is-dragging');
+  });
+  strip.addEventListener('pointerup',event=>{
+    if(!tracking) return;
+    tracking=false;
+    strip.classList.remove('is-dragging');
+    const deltaX=event.clientX-startX;
+    const deltaY=event.clientY-startY;
+    if(Math.abs(deltaX)<45 || Math.abs(deltaX)<=Math.abs(deltaY)) return;
+    swipeConsumed=true;
+    selectedDate.setDate(selectedDate.getDate()+(deltaX<0?7:-7));
+    syncVisibleMonth();
+    strip.classList.add(deltaX<0?'slide-next':'slide-prev');
+    render();
+    setTimeout(()=>{
+      strip.classList.remove('slide-next','slide-prev');
+      swipeConsumed=false;
+    },220);
+  });
+  strip.addEventListener('pointercancel',()=>{
+    tracking=false;
+    strip.classList.remove('is-dragging');
+  });
+  strip.addEventListener('click',event=>{
+    if(!swipeConsumed) return;
+    event.preventDefault();
+    event.stopPropagation();
+  },true);
+}
+
+function renderTimeRuler(){
+  const iso=fmtISO(selectedDate), ruler=document.getElementById('timeRuler');
+  const activeTurnos=turnos.filter(t=>t.fecha===iso && t.estado!=='cancelado');
+  const activeSurgeries=cirugias.filter(c=>c.fecha===iso && c.estado!=='cancelada');
+  const slots=[];
+  for(let mins=9*60; mins<19*60; mins+=30){
+    const time=`${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+    const turno=activeTurnos.find(t=>timeToMinutes(t.hora)===mins);
+    const surgery=activeSurgeries.find(c=>mins>=timeToMinutes(c.horaInicio) && mins<timeToMinutes(c.horaFin));
+    const item=surgery||turno, type=surgery?'surgery':turno?'grooming':'free';
+    slots.push(`<button type="button" class="ruler-slot ${type}" data-time="${time}" ${item?'disabled':''}><time>${time}</time><span>${item?escapeHtml(item.mascota)+' · '+escapeHtml(item.procedimiento||item.servicio):'+ Dar turno'}</span></button>`);
+  }
+  ruler.innerHTML=`<div class="ruler-heading"><strong>Disponibilidad</strong><span>09:00—19:00</span></div><div class="ruler-scroll">${slots.join('')}</div>`;
+  ruler.querySelectorAll('.ruler-slot.free').forEach(btn=>btn.onclick=()=>{ openNew(); document.getElementById('f_hora').value=btn.dataset.time; renderTimeSlots(); renderSlotWarning(); });
+}
+
+function renderUnifiedDay(){
+  const iso=fmtISO(selectedDate), ledger=document.getElementById('ledger');
+  const items=[
+    ...turnos.filter(t=>t.fecha===iso).map(data=>({type:'grooming',time:data.hora,data})),
+    ...cirugias.filter(c=>c.fecha===iso).map(data=>({type:'surgery',time:data.horaInicio,data}))
+  ].sort((a,b)=>a.time.localeCompare(b.time));
+  document.getElementById('dayLabel').textContent=selectedDayTitle();
+  document.getElementById('dayCount').textContent=`${items.length} cita${items.length!==1?'s':''}`;
+  document.getElementById('daySummary').innerHTML=`<span class="summary-pill summary-confirmado">${items.filter(i=>i.type==='grooming').length} peluquería</span><span class="summary-pill summary-confirmada">${items.filter(i=>i.type==='surgery').length} cirugía</span>`;
+  document.getElementById('nextTurnoPanel').classList.remove('show');
+  document.getElementById('upcomingPanel').innerHTML='';
+  if(!items.length){ ledger.innerHTML='<div class="empty-state"><p>El día está libre. Elegí un hueco para dar un turno.</p></div>'; return; }
+  ledger.innerHTML=items.map(({type,time,data})=>{
+    const surgery=type==='surgery';
+    return `<article class="clinical-card ${type}" data-kind="${type}" data-id="${data.id}"><div class="timeline-node"></div><time class="clinical-time">${time}</time><div class="clinical-body"><h3>${escapeHtml(data.mascota)} <small>· ${escapeHtml(data.dueno)}</small></h3><span class="service-tag">${escapeHtml(data.procedimiento||data.servicio)}</span>${data.tipoMascota?`<span class="pet-type">${escapeHtml(data.tipoMascota)}</span>`:''}${data.notas?`<p class="clinical-note">⚠ ${escapeHtml(data.notas)}</p>`:''}${surgery?expandedCirugiaDetails(data):`<div class="quick-actions"><div class="status-actions"><button data-action="confirmado" data-id="${data.id}">Confirmar</button><button data-action="realizado" data-id="${data.id}">Realizado</button><button data-action="cancelado" data-id="${data.id}">Cancelar</button></div></div>${expandedTurnoDetails(data)}`}</div>${statusStamp(data.estado,surgery)}${!surgery?contactRail(data):''}</article>`;
+  }).join('');
+  ledger.querySelectorAll('.clinical-card').forEach(row=>row.onclick=()=>{ if(row.dataset.kind==='surgery') expandedCirugiaId=expandedCirugiaId===row.dataset.id?null:row.dataset.id; else expandedTurnoId=expandedTurnoId===row.dataset.id?null:row.dataset.id; render(); });
+  attachQuickActions(); attachExpandedActions(); attachCirugiaExpandedActions();
+}
+
 function render(){
   renderPageTabs();
   renderAlertBanner();
   renderMonthView();
-  renderUpcomingPanel();
+  renderWeekStrip();
+  document.querySelector('.month-card').classList.toggle('visible', viewMode==='month');
+  document.getElementById('weekStrip').classList.toggle('hidden', viewMode==='month');
+  document.querySelector('.week-navigation').classList.toggle('hidden', viewMode==='month');
+  document.getElementById('timeRuler').classList.toggle('hidden', viewMode==='month');
+  document.querySelector('.day-label').classList.toggle('hidden', viewMode==='month');
+  document.getElementById('daySummary').classList.toggle('hidden', viewMode==='month');
+  document.getElementById('nextTurnoPanel').classList.toggle('hidden', viewMode==='month');
+  document.getElementById('upcomingPanel').classList.toggle('hidden', viewMode==='month');
+  document.getElementById('ledger').classList.toggle('hidden', viewMode==='month');
   const query = document.getElementById('searchInput').value.trim();
   if(query.length > 0){
     renderSearchResults(query);
-  } else if(activePage === 'cirugias'){
-    renderCirugiasDay();
-  } else {
-    renderDay();
+  } else if(viewMode==='today') {
+    renderTimeRuler();
+    renderUnifiedDay();
   }
 }
 
@@ -1175,10 +1235,10 @@ document.getElementById('clearSearch').onclick = ()=>{
   document.getElementById('clearSearch').classList.remove('show');
   render();
 };
-document.querySelectorAll('.app-tab').forEach(tab=>{
+document.querySelectorAll('[data-view]').forEach(tab=>{
   tab.onclick = ()=>{
-    activePage = tab.dataset.page;
-    localStorage.setItem('galata-active-page', activePage);
+    viewMode = tab.dataset.view;
+    localStorage.setItem('galata-view-mode', viewMode);
     expandedTurnoId = null;
     expandedCirugiaId = null;
     document.getElementById('searchInput').value = '';
@@ -1254,10 +1314,11 @@ document.getElementById('monthTitle').onclick = ()=>{
   goToday();
 };
 document.getElementById('todayButton').onclick = goToday;
+document.getElementById('quickTodayButton').onclick = goToday;
 
 function setEstadoChip(estado){
   currentEstado = estado;
-  document.querySelectorAll('.estado-chip').forEach(chip=>{
+  document.querySelectorAll('#estadoChoices .estado-chip').forEach(chip=>{
     chip.classList.remove('active-pendiente','active-confirmado','active-realizado','active-cancelado');
     if(chip.dataset.estado === estado){
       chip.classList.add('active-'+estado);
@@ -1266,7 +1327,7 @@ function setEstadoChip(estado){
   renderTimeSlots();
   renderSlotWarning();
 }
-document.querySelectorAll('.estado-chip').forEach(chip=>{
+document.querySelectorAll('#estadoChoices .estado-chip').forEach(chip=>{
   chip.onclick = ()=> setEstadoChip(chip.dataset.estado);
 });
 document.querySelectorAll('.surgery-chip').forEach(chip=>{
@@ -1274,18 +1335,14 @@ document.querySelectorAll('.surgery-chip').forEach(chip=>{
 });
 
 function openNew(){
+  setWizardStep('turnoForm',1);
   editingId = null;
   document.getElementById('formTitle').textContent = 'Nuevo turno';
   document.getElementById('formSub').textContent = 'Completá los datos y guardá el turno.';
   document.getElementById('turnoForm').reset();
   renderDirectorySuggestions();
-  renderPetHistory();
   document.getElementById('f_fecha').value = fmtISO(selectedDate);
   document.getElementById('f_hora').value = '10:00';
-  if(currentUserProfile && currentUserProfile.displayName){
-    setLoadedByOption(currentUserProfile.displayName);
-    document.getElementById('f_cargadoPor').value = currentUserProfile.displayName;
-  }
   document.getElementById('btnDelete').style.display = 'none';
   setEstadoChip('pendiente');
   renderTimeSlots();
@@ -1296,9 +1353,10 @@ function openNew(){
 function openEdit(id){
   const t = turnos.find(x=>x.id===id);
   if(!t) return;
+  setWizardStep('turnoForm',1);
   editingId = id;
   document.getElementById('formTitle').textContent = 'Editar turno';
-  document.getElementById('formSub').textContent = `Cargado por ${t.cargadoPor||'—'}`;
+  document.getElementById('formSub').textContent = 'Modificá los datos necesarios y guardá los cambios.';
   document.getElementById('f_fecha').value = t.fecha;
   document.getElementById('f_hora').value = t.hora;
   document.getElementById('f_dueno').value = t.dueno;
@@ -1308,14 +1366,11 @@ function openEdit(id){
   document.getElementById('f_telefono').value = t.telefono||'';
   document.getElementById('f_instagram').value = t.instagram||'';
   document.getElementById('f_notas').value = t.notas||'';
-  setLoadedByOption(t.cargadoPor || 'Dueña');
-  document.getElementById('f_cargadoPor').value = t.cargadoPor||'Dueña';
-  document.getElementById('btnDelete').style.display = canDeleteTurnos() ? 'inline-block' : 'none';
+  document.getElementById('btnDelete').style.display = canDeleteTurnos() ? 'grid' : 'none';
   setEstadoChip(t.estado||'pendiente');
   renderTimeSlots();
   renderSlotWarning();
   renderPetSuggestions();
-  renderPetHistory();
   document.getElementById('overlay').classList.add('open');
 }
 
@@ -1331,6 +1386,7 @@ function setCirugiaEstadoChip(estado){
 }
 
 function openNewCirugia(){
+  setWizardStep('cirugiaForm',1);
   editingCirugiaId = null;
   document.getElementById('cirugiaFormTitle').textContent = 'Nueva cirugia';
   document.getElementById('cirugiaFormSub').textContent = 'Programa la cirugia y revisa los turnos que se cruzan.';
@@ -1339,10 +1395,6 @@ function openNewCirugia(){
   document.getElementById('c_fecha').value = fmtISO(selectedDate);
   document.getElementById('c_horaInicio').value = '10:00';
   document.getElementById('c_horaFin').value = '12:00';
-  if(currentUserProfile && currentUserProfile.displayName){
-    setLoadedByOption(currentUserProfile.displayName, 'c_cargadoPor');
-    document.getElementById('c_cargadoPor').value = currentUserProfile.displayName;
-  }
   document.getElementById('btnDeleteCirugia').style.display = 'none';
   setCirugiaEstadoChip('programada');
   syncSurgeryTimeControls();
@@ -1352,9 +1404,10 @@ function openNewCirugia(){
 function openEditCirugia(id){
   const cirugia = cirugias.find(x=>x.id===id);
   if(!cirugia) return;
+  setWizardStep('cirugiaForm',1);
   editingCirugiaId = id;
   document.getElementById('cirugiaFormTitle').textContent = 'Editar cirugia';
-  document.getElementById('cirugiaFormSub').textContent = `Cargada por ${cirugia.cargadoPor||'-'}`;
+  document.getElementById('cirugiaFormSub').textContent = 'Modificá los datos necesarios y guardá los cambios.';
   document.getElementById('c_fecha').value = cirugia.fecha;
   document.getElementById('c_horaInicio').value = cirugia.horaInicio;
   document.getElementById('c_horaFin').value = cirugia.horaFin;
@@ -1364,15 +1417,14 @@ function openEditCirugia(id){
   document.getElementById('c_tipoMascota').value = cirugia.tipoMascota||'';
   document.getElementById('c_telefono').value = cirugia.telefono||'';
   document.getElementById('c_notas').value = cirugia.notas||'';
-  setLoadedByOption(cirugia.cargadoPor || 'Duena', 'c_cargadoPor');
-  document.getElementById('c_cargadoPor').value = cirugia.cargadoPor||'Duena';
-  document.getElementById('btnDeleteCirugia').style.display = canDeleteTurnos() ? 'inline-block' : 'none';
+  document.getElementById('btnDeleteCirugia').style.display = canDeleteTurnos() ? 'grid' : 'none';
   setCirugiaEstadoChip(cirugia.estado||'programada');
   syncSurgeryTimeControls();
   document.getElementById('cirugiaOverlay').classList.add('open');
 }
 
-document.getElementById('fabAdd').onclick = ()=> activePage === 'cirugias' ? openNewCirugia() : openNew();
+document.getElementById('fabAdd').onclick = openNew;
+document.getElementById('fabSurgery').onclick = openNewCirugia;
 document.getElementById('btnCancel').onclick = ()=> document.getElementById('overlay').classList.remove('open');
 document.getElementById('overlay').onclick = (e)=>{ if(e.target.id==='overlay') e.currentTarget.classList.remove('open'); };
 document.getElementById('btnCancelCirugia').onclick = ()=> document.getElementById('cirugiaOverlay').classList.remove('open');
@@ -1386,12 +1438,13 @@ document.getElementById('btnDelete').onclick = async ()=>{
   }
   if(!confirm('¿Eliminar este turno?')) return;
   const deletedId = editingId;
+  const deleted = turnos.find(t=>t.id===deletedId);
   turnos = turnos.filter(t=>t.id!==editingId);
   try{
     await deleteTurno(deletedId);
     document.getElementById('overlay').classList.remove('open');
     render();
-    showToast('Turno eliminado');
+    offerUndo('Turno eliminado', async ()=>{ await saveTurno(deleted); turnos.push(deleted); render(); showToast('Turno restaurado'); });
   }catch(err){
     console.error(err);
     await loadTurnos();
@@ -1407,12 +1460,13 @@ document.getElementById('btnDeleteCirugia').onclick = async ()=>{
   }
   if(!confirm('Eliminar esta cirugia?')) return;
   const deletedId = editingCirugiaId;
+  const deleted = cirugias.find(c=>c.id===deletedId);
   cirugias = cirugias.filter(t=>t.id!==editingCirugiaId);
   try{
     await deleteCirugia(deletedId);
     document.getElementById('cirugiaOverlay').classList.remove('open');
     render();
-    showToast('Cirugia eliminada');
+    offerUndo('Cirugía eliminada', async ()=>{ await saveCirugia(deleted); cirugias.push(deleted); render(); showToast('Cirugía restaurada'); });
   }catch(err){
     console.error(err);
     await loadCirugias();
@@ -1434,6 +1488,7 @@ function marcarInvalido(input){
 document.getElementById('turnoForm').onsubmit = async (e)=>{
   e.preventDefault();
   try{
+    const previousTurno = editingId ? turnos.find(t=>t.id===editingId) : null;
     const fFecha = document.getElementById('f_fecha');
     const fHora = document.getElementById('f_hora');
     const fDueno = document.getElementById('f_dueno');
@@ -1466,7 +1521,7 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
       instagram: document.getElementById('f_instagram').value.trim(),
       notas: document.getElementById('f_notas').value.trim(),
       estado: currentEstado,
-      cargadoPor: document.getElementById('f_cargadoPor').value
+      cargadoPor: previousTurno?.cargadoPor || currentUserProfile?.displayName || currentUserProfile?.email || 'Usuario'
     };
 
     const conflict = findSlotConflict(data);
@@ -1489,7 +1544,9 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
     selectedDate = new Date(data.fecha+'T00:00:00');
     syncVisibleMonth();
     render();
-    showToast(editingId ? 'Turno actualizado' : 'Turno guardado');
+    if(previousTurno && data.estado==='cancelado' && previousTurno.estado!=='cancelado'){
+      offerUndo('Turno cancelado', async ()=>{ await saveTurno(previousTurno); turnos=turnos.map(t=>t.id===previousTurno.id?previousTurno:t); render(); showToast('Cancelación deshecha'); });
+    } else showToast(editingId ? 'Turno actualizado' : 'Turno guardado');
   }catch(err){
     console.error(err);
     const message = err && err.message ? err.message : '';
@@ -1506,6 +1563,7 @@ document.getElementById('turnoForm').onsubmit = async (e)=>{
 document.getElementById('cirugiaForm').onsubmit = async (e)=>{
   e.preventDefault();
   try{
+    const previousCirugia = editingCirugiaId ? cirugias.find(c=>c.id===editingCirugiaId) : null;
     const fFecha = document.getElementById('c_fecha');
     const fInicio = document.getElementById('c_horaInicio');
     const fFin = document.getElementById('c_horaFin');
@@ -1547,7 +1605,7 @@ document.getElementById('cirugiaForm').onsubmit = async (e)=>{
       telefono: document.getElementById('c_telefono').value.trim(),
       notas: document.getElementById('c_notas').value.trim(),
       estado: currentCirugiaEstado,
-      cargadoPor: document.getElementById('c_cargadoPor').value
+      cargadoPor: previousCirugia?.cargadoPor || currentUserProfile?.displayName || currentUserProfile?.email || 'Usuario'
     };
 
     await saveCirugia(data);
@@ -1560,14 +1618,131 @@ document.getElementById('cirugiaForm').onsubmit = async (e)=>{
     document.getElementById('cirugiaOverlay').classList.remove('open');
     selectedDate = new Date(data.fecha+'T00:00:00');
     syncVisibleMonth();
-    activePage = 'cirugias';
-    localStorage.setItem('galata-active-page', activePage);
     render();
-    showToast(editingCirugiaId ? 'Cirugia actualizada' : 'Cirugia guardada');
+    if(previousCirugia && data.estado==='cancelada' && previousCirugia.estado!=='cancelada'){
+      offerUndo('Cirugía cancelada', async ()=>{ await saveCirugia(previousCirugia); cirugias=cirugias.map(c=>c.id===previousCirugia.id?previousCirugia:c); render(); showToast('Cancelación deshecha'); });
+    } else showToast(editingCirugiaId ? 'Cirugia actualizada' : 'Cirugia guardada');
   }catch(err){
     console.error(err);
     showToast('Algo fallo al guardar la cirugia. Proba de nuevo.');
   }
 };
 
+function buildFormWizard({ formId, firstStepIds, splitFieldId, splitSiblingBeforeId, nextLabel }){
+  const form = document.getElementById(formId);
+  const stepOne = document.createElement('div');
+  const stepTwo = document.createElement('div');
+  stepOne.className = 'wizard-step wizard-step-one';
+  stepTwo.className = 'wizard-step wizard-step-two';
+
+  const nodes = Array.from(form.children);
+  const firstNodes = firstStepIds.map(id=>document.getElementById(id)).filter(Boolean);
+  const topLevelNode = node=>{
+    let current=node;
+    while(current.parentElement && current.parentElement!==form) current=current.parentElement;
+    return current;
+  };
+  const firstContainers = new Set(firstNodes.map(topLevelNode));
+  if(nodes[0]) firstContainers.add(nodes[0]);
+  nodes.forEach(node=>(firstContainers.has(node) ? stepOne : stepTwo).appendChild(node));
+
+  if(splitFieldId){
+    const splitField = document.getElementById(splitFieldId)?.closest('.field');
+    if(splitField){
+      const sourceRow=splitField.parentElement;
+      stepOne.appendChild(splitField);
+      if(sourceRow?.children.length){
+        const before=splitSiblingBeforeId ? document.getElementById(splitSiblingBeforeId)?.closest('.field, .row2') : null;
+        const siblings=Array.from(sourceRow.children);
+        siblings.forEach(sibling=>before && before.parentElement===stepTwo ? stepTwo.insertBefore(sibling,before) : stepTwo.appendChild(sibling));
+        sourceRow.remove();
+      }
+    }
+  }
+
+  const progress = document.createElement('div');
+  progress.className = 'wizard-progress';
+  progress.innerHTML = '<span class="active"><b>1</b> Turno</span><i></i><span><b>2</b> Paciente</span>';
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'btn btn-primary wizard-next';
+  next.textContent = nextLabel;
+  stepOne.appendChild(next);
+
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'btn btn-secondary wizard-back';
+  back.textContent = '← Volver';
+  const actions = stepTwo.querySelector('.form-actions');
+  if(actions) actions.prepend(back);
+
+  form.append(progress, stepOne, stepTwo);
+  const deleteButton=form.querySelector('.btn-delete');
+  if(deleteButton){
+    deleteButton.classList.add('form-delete-top');
+    form.insertBefore(deleteButton,progress);
+  }
+  next.onclick = ()=>{
+    const required = firstStepIds
+      .map(id=>document.getElementById(id))
+      .filter(element=>element && element.matches('input, select, textarea'));
+    const invalid = required.find(input=>!input.value || !input.value.trim());
+    if(invalid){
+      marcarInvalido(invalid);
+      invalid.focus();
+      showToast('Completá los datos del turno para continuar');
+      return;
+    }
+    if(formId==='cirugiaForm' && timeToMinutes(fieldValue('c_horaFin'))<=timeToMinutes(fieldValue('c_horaInicio'))){
+      const end=document.getElementById('c_horaFin');
+      marcarInvalido(end); end.focus(); showToast('La hora de fin debe ser posterior al inicio'); return;
+    }
+    setWizardStep(formId, 2);
+  };
+  back.onclick = ()=>setWizardStep(formId, 1);
+}
+
+function setWizardStep(formId, step){
+  const form=document.getElementById(formId);
+  form.dataset.step=String(step);
+  form.querySelector('.wizard-step-one').classList.toggle('active',step===1);
+  form.querySelector('.wizard-step-two').classList.toggle('active',step===2);
+  const markers=form.querySelectorAll('.wizard-progress span');
+  markers.forEach((marker,index)=>marker.classList.toggle('active',index<step));
+  form.closest('.card-form')?.scrollTo({top:0,behavior:'smooth'});
+}
+
+buildFormWizard({
+  formId:'turnoForm',
+  firstStepIds:['f_fecha','f_hora','f_servicio','slotWarning','timeSlots'],
+  splitFieldId:'f_servicio',
+  splitSiblingBeforeId:'f_instagram',
+  nextLabel:'Continuar con paciente →'
+});
+{
+  const phoneField=document.getElementById('f_telefono').closest('.field');
+  const oldPhoneRow=phoneField.parentElement;
+  const instagramField=document.getElementById('f_instagram').closest('.field');
+  instagramField.parentElement.insertBefore(phoneField,instagramField);
+  if(oldPhoneRow.classList.contains('row2') && !oldPhoneRow.children.length) oldPhoneRow.remove();
+}
+buildFormWizard({
+  formId:'cirugiaForm',
+  firstStepIds:['c_fecha','c_procedimiento','c_horaInicio','c_horaFin','surgeryStartSlots','surgeryEndSlots','surgeryOverlaps'],
+  nextLabel:'Continuar con paciente →'
+});
+setWizardStep('turnoForm',1);
+setWizardStep('cirugiaForm',1);
+setupWeekSwipe();
+
+function updateConnectionStatus(){
+  const status=document.getElementById('connectionStatus');
+  const online=navigator.onLine;
+  status.classList.toggle('offline',!online);
+  document.getElementById('connectionText').textContent=online?'Conectado':'Sin conexión';
+}
+window.addEventListener('online',updateConnectionStatus);
+window.addEventListener('offline',updateConnectionStatus);
+updateConnectionStatus();
 initAuth();

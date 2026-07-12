@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Galata Turnos</title>
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-icon-180x180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
@@ -10,7 +10,7 @@
 <link rel="shortcut icon" href="icons/favicon.ico">
 <link rel="manifest" href="icons/manifest.json">
 <meta name="msapplication-config" content="icons/browserconfig.xml">
-<meta name="theme-color" content="#EFE8DD">
+<meta name="theme-color" content="#F7F4EE">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -40,14 +40,15 @@
       <img class="brand-mark" src="icons/android-icon-96x96.png" alt="Galata">
     </div>
     <h1>Galata Turnos</h1>
-    <div class="subtitle" id="subtitle">Cargando turnos...</div>
+    <div class="subtitle" id="subtitle">Cargando agenda...</div>
+    <div class="connection-status" id="connectionStatus"><span></span><span id="connectionText">Conectado</span></div>
     <div class="session-badge" id="sessionBadge"></div>
     <button class="logout-btn" id="logoutButton">Salir</button>
   </header>
 
-  <nav class="app-tabs" aria-label="Secciones">
-    <button type="button" class="app-tab active" id="turnosTab" data-page="turnos">Peluquer&iacute;a</button>
-    <button type="button" class="app-tab" id="cirugiasTab" data-page="cirugias">Cirug&iacute;as</button>
+  <nav class="app-tabs view-switch" aria-label="Vista de agenda">
+    <button type="button" class="app-tab" id="monthViewButton" data-view="month">Mes</button>
+    <button type="button" class="app-tab active" id="todayViewButton" data-view="today">Hoy</button>
   </nav>
 
   <div class="alert-banner" id="alertBanner">
@@ -62,6 +63,11 @@
   <div class="search-box">
     <input type="text" id="searchInput" placeholder="Buscar por due&ntilde;o/a o mascota...">
     <button class="clear-search" id="clearSearch">&times;</button>
+  </div>
+
+  <div class="week-navigation">
+    <div class="week-strip" id="weekStrip" aria-label="D&iacute;as cercanos"></div>
+    <button type="button" class="quick-today" id="quickTodayButton">Hoy</button>
   </div>
 
   <div class="month-card">
@@ -86,13 +92,17 @@
   </div>
 
   <div class="day-summary" id="daySummary"></div>
+  <section class="time-ruler" id="timeRuler" aria-label="Huecos del d&iacute;a"></section>
   <div class="next-turno-panel" id="nextTurnoPanel"></div>
   <div class="upcoming-panel" id="upcomingPanel"></div>
 
   <div class="ledger" id="ledger"></div>
 </div>
 
-<button class="fab" id="fabAdd">+</button>
+<div class="fab-actions" aria-label="Crear cita">
+  <button class="fab-secondary" id="fabSurgery" type="button">+ Cirug&iacute;a</button>
+  <button class="fab" id="fabAdd" type="button" aria-label="Nuevo turno de peluquer&iacute;a">+</button>
+</div>
 
 <div class="overlay" id="overlay">
   <div class="card-form">
@@ -154,23 +164,15 @@
         <label>Notas (ej: nerviosa, alergias)</label>
         <textarea id="f_notas" placeholder="Opcional"></textarea>
       </div>
-      <div class="pet-history" id="petHistory"></div>
       <div class="field">
         <label>Estado</label>
         <div class="estado-choices" id="estadoChoices">
           <div class="estado-chip" data-estado="pendiente">Pendiente</div>
           <div class="estado-chip" data-estado="confirmado">Confirmado</div>
-          <div class="estado-chip" data-estado="realizado">Realizado</div>
-          <div class="estado-chip" data-estado="cancelado">Cancelado</div>
         </div>
       </div>
-      <div class="field">
-        <label>Cargado por</label>
-        <select id="f_cargadoPor">
-        </select>
-      </div>
       <div class="form-actions">
-        <button type="button" class="btn btn-delete" id="btnDelete" style="display:none;">Eliminar</button>
+        <button type="button" class="btn btn-delete" id="btnDelete" style="display:none;" aria-label="Eliminar turno" title="Eliminar turno"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg></button>
         <button type="button" class="btn btn-secondary" id="btnCancel">Cancelar</button>
         <button type="submit" class="btn btn-primary">Guardar</button>
       </div>
@@ -238,19 +240,12 @@
       <div class="field">
         <label>Estado</label>
         <div class="estado-choices surgery-estado-choices" id="cirugiaEstadoChoices">
-          <div class="estado-chip surgery-chip" data-estado="programada">Programada</div>
-          <div class="estado-chip surgery-chip" data-estado="confirmada">Confirmada</div>
-          <div class="estado-chip surgery-chip" data-estado="realizada">Realizada</div>
-          <div class="estado-chip surgery-chip" data-estado="cancelada">Cancelada</div>
+          <div class="estado-chip surgery-chip" data-estado="programada">Pendiente</div>
+          <div class="estado-chip surgery-chip" data-estado="confirmada">Confirmado</div>
         </div>
       </div>
-      <div class="field">
-        <label>Cargado por</label>
-        <select id="c_cargadoPor">
-        </select>
-      </div>
       <div class="form-actions">
-        <button type="button" class="btn btn-delete" id="btnDeleteCirugia" style="display:none;">Eliminar</button>
+        <button type="button" class="btn btn-delete" id="btnDeleteCirugia" style="display:none;" aria-label="Eliminar cirug&iacute;a" title="Eliminar cirug&iacute;a"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg></button>
         <button type="button" class="btn btn-secondary" id="btnCancelCirugia">Cancelar</button>
         <button type="submit" class="btn btn-primary">Guardar</button>
       </div>
@@ -258,7 +253,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast"><span id="toastMessage"></span><button type="button" id="toastUndo">Deshacer</button></div>
 
 <script type="module" src="script.js"></script>
 </body>
