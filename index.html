@@ -253,6 +253,21 @@
   </div>
 </div>
 
+<div class="onboarding" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle" aria-describedby="onboardingText" hidden>
+  <div class="onboarding-card">
+    <button class="onboarding-skip" id="onboardingSkip" type="button">Saltar</button>
+    <div class="onboarding-visual" id="onboardingVisual" aria-hidden="true"></div>
+    <div class="onboarding-progress" id="onboardingProgress" aria-label="Progreso del tutorial"></div>
+    <p class="onboarding-kicker" id="onboardingKicker"></p>
+    <h2 id="onboardingTitle"></h2>
+    <p class="onboarding-text" id="onboardingText"></p>
+    <div class="onboarding-actions">
+      <button class="btn btn-secondary" id="onboardingBack" type="button">Atr&aacute;s</button>
+      <button class="btn btn-primary" id="onboardingNext" type="button">Siguiente</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"><span id="toastMessage"></span><button type="button" id="toastUndo">Deshacer</button></div>
 
 <script type="module" src="script.js"></script>

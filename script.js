@@ -21,6 +21,75 @@ let activePage = 'unified';
 let viewMode = localStorage.getItem('galata-view-mode') === 'month' ? 'month' : 'today';
 let undoTimer = null;
 let pendingUndo = null;
+const ONBOARDING_STORAGE_KEY = 'galata-onboarding-completed-v1';
+let onboardingStep = 0;
+
+const ONBOARDING_STEPS = [
+  {
+    kicker: 'Bienvenida',
+    title: 'Tu agenda, de un vistazo',
+    text: 'Acá vas a ver juntos los turnos de peluquería y las cirugías de cada día.',
+    icon: '🐾'
+  },
+  {
+    kicker: 'Navegación',
+    title: 'Elegí el día o mirá el mes',
+    text: 'Tocá un día de la semana para abrir su agenda. Usá “Hoy” para volver rápido o “Mes” para planificar más adelante.',
+    icon: '📅'
+  },
+  {
+    kicker: 'Búsqueda',
+    title: 'Encontrá un paciente rápido',
+    text: 'Buscá por el nombre del dueño o de la mascota. También podés tocar una ficha para ver sus datos y acciones.',
+    icon: '🔎'
+  },
+  {
+    kicker: 'Nuevo registro',
+    title: 'Creá turnos y cirugías',
+    text: 'Usá el botón “+” para un turno de peluquería o “+ Cirugía”. El formulario te guía paso a paso.',
+    icon: '＋'
+  },
+  {
+    kicker: 'Seguimiento',
+    title: 'Mantené cada cita al día',
+    text: 'Desde cada ficha podés confirmar, completar o cancelar una cita y acceder a las opciones de contacto.',
+    icon: '✓'
+  }
+];
+
+function hasCompletedOnboarding(){
+  try{ return localStorage.getItem(ONBOARDING_STORAGE_KEY) === '1'; }
+  catch(_err){ return false; }
+}
+
+function renderOnboardingStep(){
+  const step = ONBOARDING_STEPS[onboardingStep];
+  document.getElementById('onboardingKicker').textContent = `${step.kicker} · ${onboardingStep + 1} de ${ONBOARDING_STEPS.length}`;
+  document.getElementById('onboardingTitle').textContent = step.title;
+  document.getElementById('onboardingText').textContent = step.text;
+  document.getElementById('onboardingVisual').textContent = step.icon;
+  document.getElementById('onboardingBack').disabled = onboardingStep === 0;
+  document.getElementById('onboardingNext').textContent = onboardingStep === ONBOARDING_STEPS.length - 1 ? 'Empezar' : 'Siguiente';
+  document.getElementById('onboardingProgress').innerHTML = ONBOARDING_STEPS.map((_, index) =>
+    `<span class="${index === onboardingStep ? 'active' : ''}" aria-hidden="true"></span>`
+  ).join('');
+}
+
+function openOnboarding(){
+  if(hasCompletedOnboarding()) return;
+  onboardingStep = 0;
+  renderOnboardingStep();
+  const onboarding = document.getElementById('onboarding');
+  onboarding.hidden = false;
+  document.body.classList.add('onboarding-open');
+  requestAnimationFrame(() => document.getElementById('onboardingNext').focus());
+}
+
+function completeOnboarding(){
+  try{ localStorage.setItem(ONBOARDING_STORAGE_KEY, '1'); }catch(_err){}
+  document.getElementById('onboarding').hidden = true;
+  document.body.classList.remove('onboarding-open');
+}
 
 function fmtISO(d){
   const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
@@ -742,6 +811,7 @@ async function showAppForUser(user, profile = null){
   document.getElementById('loginError').textContent = '';
   if(user) renderSessionBadge(user, currentUserProfile);
   await loadData();
+  openOnboarding();
 }
 
 function showLogin(){
@@ -1626,6 +1696,22 @@ document.getElementById('cirugiaForm').onsubmit = async (e)=>{
     console.error(err);
     showToast('Algo fallo al guardar la cirugia. Proba de nuevo.');
   }
+};
+
+document.getElementById('onboardingSkip').onclick = completeOnboarding;
+document.getElementById('onboardingBack').onclick = ()=>{
+  if(onboardingStep > 0){
+    onboardingStep--;
+    renderOnboardingStep();
+  }
+};
+document.getElementById('onboardingNext').onclick = ()=>{
+  if(onboardingStep === ONBOARDING_STEPS.length - 1){
+    completeOnboarding();
+    return;
+  }
+  onboardingStep++;
+  renderOnboardingStep();
 };
 
 function buildFormWizard({ formId, firstStepIds, splitFieldId, splitSiblingBeforeId, nextLabel }){
