@@ -21,8 +21,11 @@ let activePage = 'unified';
 let viewMode = localStorage.getItem('galata-view-mode') === 'month' ? 'month' : 'today';
 let undoTimer = null;
 let pendingUndo = null;
-const ONBOARDING_STORAGE_KEY = 'galata-onboarding-completed-v1';
+const ONBOARDING_STORAGE_KEY = 'galata-onboarding-completed-v2';
 let onboardingStep = 0;
+let featureTourStep = 0;
+let featureTourTarget = null;
+let featureTourKind = 'turno';
 
 const ONBOARDING_STEPS = [
   {
@@ -57,6 +60,116 @@ const ONBOARDING_STEPS = [
   }
 ];
 
+const FEATURE_TOUR_STEPS = [
+  {
+    target: '.view-switch',
+    title: 'Hoy o todo el mes',
+    text: 'Desde acá cambiás entre la agenda del día y el calendario mensual.'
+  },
+  {
+    target: '.week-navigation',
+    title: 'Movete entre los días',
+    text: 'Tocá un día para ver sus citas. También podés deslizar la semana hacia los costados y volver a hoy con el botón “Hoy”.',
+    enter(){
+      if(viewMode !== 'today'){
+        viewMode = 'today';
+        localStorage.setItem('galata-view-mode', viewMode);
+        render();
+      }
+    }
+  },
+  {
+    target: '.search-box',
+    title: 'Buscá personas y mascotas',
+    text: 'Escribí el nombre del dueño o de la mascota para encontrar rápidamente todos sus turnos.'
+  },
+  {
+    target: '.fab-actions',
+    title: 'Agendá una nueva cita',
+    text: 'El “+” crea un turno de peluquería y “+ Cirugía” registra un procedimiento. Ahora te mostramos qué completar.'
+  },
+  {
+    target: '#turnoForm .wizard-step-one',
+    title: 'Primero: turno y servicio',
+    text: 'Elegí la fecha, la hora y el servicio. Los horarios ocupados quedan señalados para evitar superposiciones.',
+    enter(){
+      openNew();
+      document.getElementById('overlay').classList.add('tour-form-open');
+      setWizardStep('turnoForm', 1);
+    }
+  },
+  {
+    target: '#f_dueno',
+    title: 'Cargá bien el nombre del dueño',
+    text: 'Este nombre identifica al cliente. Después del primer turno queda disponible como sugerencia para futuras citas.',
+    enter(){ setWizardStep('turnoForm', 2); }
+  },
+  {
+    target: '#f_mascota',
+    title: 'Luego, la mascota',
+    text: 'Asociamos la mascota con su dueño. Al elegirlos otra vez, la app recupera automáticamente sus datos guardados.'
+  },
+  {
+    target: '#f_telefono',
+    title: 'Completá el contacto',
+    text: 'Teléfono e Instagram se guardan junto al cliente y se autocompletan en próximos turnos. Cargarlos bien evita repetir trabajo y permite contactar desde la ficha.'
+  },
+  {
+    target: '#f_tipoMascota',
+    title: 'La raza también se recuerda',
+    text: 'El tipo o raza queda asociado a la mascota y se completa solo cuando vuelva a agendarse.'
+  },
+  {
+    target: '#turnoForm .wizard-step-two .form-actions',
+    title: 'Revisá y guardá',
+    text: 'Al tocar “Guardar” se crea el turno y esos datos pasan a formar parte del directorio para reutilizarlos más adelante.'
+  }
+];
+
+const SURGERY_TOUR_STEPS = [
+  ...FEATURE_TOUR_STEPS.slice(0, 4),
+  {
+    target: '#cirugiaForm .wizard-step-one',
+    title: 'Primero: procedimiento y horario',
+    text: 'Elegí la fecha, el procedimiento y las horas de inicio y fin. La app señala cruces con otros turnos.',
+    enter(){
+      openNewCirugia();
+      document.getElementById('cirugiaOverlay').classList.add('tour-form-open');
+      setWizardStep('cirugiaForm', 1);
+    }
+  },
+  {
+    target: '#c_dueno',
+    title: 'Identificá al dueño',
+    text: 'Usá siempre el mismo nombre. Después queda disponible como sugerencia para próximas citas.',
+    enter(){ setWizardStep('cirugiaForm', 2); }
+  },
+  {
+    target: '#c_mascota',
+    title: 'Asociá la mascota',
+    text: 'La mascota queda vinculada con su dueño y podrá seleccionarse nuevamente en futuros turnos o cirugías.'
+  },
+  {
+    target: '#c_telefono',
+    title: 'Agregá el teléfono',
+    text: 'El contacto se recupera automáticamente al volver a elegir al cliente.'
+  },
+  {
+    target: '#c_tipoMascota',
+    title: 'Completá el tipo o raza',
+    text: 'Este dato queda asociado a la mascota y también se reutiliza en próximas citas.'
+  },
+  {
+    target: '#cirugiaForm .wizard-step-two .form-actions',
+    title: 'Revisá y guardá la cirugía',
+    text: 'Al guardar se registra la cirugía y los datos del paciente quedan disponibles para reutilizarlos.'
+  }
+];
+
+function activeFeatureTourSteps(){
+  return featureTourKind === 'cirugia' ? SURGERY_TOUR_STEPS : FEATURE_TOUR_STEPS;
+}
+
 function hasCompletedOnboarding(){
   try{ return localStorage.getItem(ONBOARDING_STORAGE_KEY) === '1'; }
   catch(_err){ return false; }
@@ -77,6 +190,7 @@ function renderOnboardingStep(){
 
 function openOnboarding(){
   if(hasCompletedOnboarding()) return;
+  try{ localStorage.setItem(ONBOARDING_STORAGE_KEY, '1'); }catch(_err){}
   onboardingStep = 0;
   renderOnboardingStep();
   const onboarding = document.getElementById('onboarding');
@@ -85,10 +199,101 @@ function openOnboarding(){
   requestAnimationFrame(() => document.getElementById('onboardingNext').focus());
 }
 
-function completeOnboarding(){
+function finishOnboarding(){
   try{ localStorage.setItem(ONBOARDING_STORAGE_KEY, '1'); }catch(_err){}
   document.getElementById('onboarding').hidden = true;
+  document.getElementById('featureTour').hidden = true;
   document.body.classList.remove('onboarding-open');
+  featureTourTarget?.classList.remove('feature-tour-target');
+  featureTourTarget = null;
+  document.getElementById('overlay').classList.remove('open', 'tour-form-open');
+  document.getElementById('cirugiaOverlay').classList.remove('open', 'tour-form-open');
+}
+
+function positionFeatureTourTip(target){
+  const tip = document.getElementById('featureTourTip');
+  const rect = target.getBoundingClientRect();
+  const shade = document.querySelector('.feature-tour-shade');
+  const gap = 14;
+  shade.style.left = `${Math.max(6, rect.left - 6)}px`;
+  shade.style.top = `${Math.max(6, rect.top - 6)}px`;
+  shade.style.width = `${Math.min(window.innerWidth - 12, rect.width + 12)}px`;
+  shade.style.height = `${Math.min(window.innerHeight - 12, rect.height + 12)}px`;
+  const tipWidth = Math.min(380, window.innerWidth - 28);
+  tip.style.width = `${tipWidth}px`;
+  tip.style.left = `${Math.max(14, Math.min(window.innerWidth - tipWidth - 14, rect.left + rect.width / 2 - tipWidth / 2))}px`;
+  tip.style.top = 'auto';
+  tip.style.bottom = 'auto';
+  const estimatedHeight = tip.offsetHeight || 250;
+  const roomBelow = window.innerHeight - rect.bottom - gap;
+  const roomAbove = rect.top - gap;
+  if(roomBelow >= estimatedHeight || roomBelow >= roomAbove){
+    tip.style.top = `${rect.bottom + gap}px`;
+  }else{
+    tip.style.top = `${Math.max(14, rect.top - estimatedHeight - gap)}px`;
+  }
+}
+
+function renderFeatureTourStep(){
+  featureTourTarget?.classList.remove('feature-tour-target');
+  const steps = activeFeatureTourSteps();
+  const step = steps[featureTourStep];
+  if(step.enter) step.enter();
+  const target = document.querySelector(step.target);
+  if(!target) return finishOnboarding();
+  featureTourTarget = target;
+  target.classList.add('feature-tour-target');
+  target.scrollIntoView({ behavior: 'smooth', block: featureTourStep === 3 ? 'end' : 'center' });
+  document.getElementById('featureTourCount').textContent = `RECORRIDO · ${featureTourStep + 1} DE ${steps.length}`;
+  document.getElementById('featureTourTitle').textContent = step.title;
+  document.getElementById('featureTourText').textContent = step.text;
+  document.getElementById('featureTourBack').disabled = featureTourStep === 0;
+  document.getElementById('featureTourNext').textContent = featureTourStep === steps.length - 1 ? 'Entendido' : 'Siguiente';
+  setTimeout(() => positionFeatureTourTip(target), 260);
+}
+
+document.addEventListener('click', event=>{
+  if(document.getElementById('featureTour').hidden || !featureTourTarget) return;
+  const tip = document.getElementById('featureTourTip');
+  if(tip.contains(event.target)) return;
+  if(!featureTourTarget.contains(event.target)){
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  const appointmentButton = event.target.closest('#fabAdd, #fabSurgery');
+  if(featureTourStep === 3 && appointmentButton){
+    featureTourKind = appointmentButton.id === 'fabSurgery' ? 'cirugia' : 'turno';
+    setTimeout(()=>{
+      featureTourStep++;
+      renderFeatureTourStep();
+    }, 100);
+    return;
+  }
+  const wizardNext = event.target.closest('.wizard-next');
+  if(featureTourStep === 4 && wizardNext){
+    const form = wizardNext.closest('form');
+    setTimeout(()=>{
+      if(form?.dataset.step === '2'){
+        featureTourStep++;
+        renderFeatureTourStep();
+      }
+    }, 120);
+    return;
+  }
+  setTimeout(()=>{
+    const step = activeFeatureTourSteps()[featureTourStep];
+    const refreshedTarget = document.querySelector(step.target);
+    if(refreshedTarget) positionFeatureTourTip(refreshedTarget);
+  }, 80);
+}, true);
+
+function startFeatureTour(){
+  document.getElementById('onboarding').hidden = true;
+  document.getElementById('featureTour').hidden = false;
+  featureTourStep = 0;
+  featureTourKind = 'turno';
+  renderFeatureTourStep();
 }
 
 function fmtISO(d){
@@ -1698,7 +1903,7 @@ document.getElementById('cirugiaForm').onsubmit = async (e)=>{
   }
 };
 
-document.getElementById('onboardingSkip').onclick = completeOnboarding;
+document.getElementById('onboardingSkip').onclick = finishOnboarding;
 document.getElementById('onboardingBack').onclick = ()=>{
   if(onboardingStep > 0){
     onboardingStep--;
@@ -1707,12 +1912,31 @@ document.getElementById('onboardingBack').onclick = ()=>{
 };
 document.getElementById('onboardingNext').onclick = ()=>{
   if(onboardingStep === ONBOARDING_STEPS.length - 1){
-    completeOnboarding();
+    startFeatureTour();
     return;
   }
   onboardingStep++;
   renderOnboardingStep();
 };
+document.getElementById('featureTourSkip').onclick = finishOnboarding;
+document.getElementById('featureTourBack').onclick = ()=>{
+  if(featureTourStep > 0){
+    featureTourStep--;
+    if(featureTourStep < 4){
+      document.getElementById('overlay').classList.remove('open', 'tour-form-open');
+      document.getElementById('cirugiaOverlay').classList.remove('open', 'tour-form-open');
+    }
+    renderFeatureTourStep();
+  }
+};
+document.getElementById('featureTourNext').onclick = ()=>{
+  if(featureTourStep === activeFeatureTourSteps().length - 1) return finishOnboarding();
+  featureTourStep++;
+  renderFeatureTourStep();
+};
+window.addEventListener('resize', ()=>{
+  if(!document.getElementById('featureTour').hidden && featureTourTarget) positionFeatureTourTip(featureTourTarget);
+});
 
 function buildFormWizard({ formId, firstStepIds, splitFieldId, splitSiblingBeforeId, nextLabel }){
   const form = document.getElementById(formId);
