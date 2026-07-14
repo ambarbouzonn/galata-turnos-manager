@@ -1,7 +1,11 @@
+import { inject } from '@vercel/analytics';
 import { getCurrentSession, getUserProfile, onAuthChange, signIn, signOut } from './src/authRepository.js';
 import { deleteCirugia, getCirugias, saveCirugia } from './src/cirugiasRepository.js';
 import { getDirectory } from './src/directoryRepository.js';
 import { deleteTurno, getTurnos, saveTurno } from './src/turnosRepository.js';
+
+// Initialize Vercel Analytics
+inject();
 
 let turnos = [];
 let cirugias = [];
